@@ -55,8 +55,10 @@ class TypeCheckError extends Exception {
 }
 
 class VTable {
-    VTable() {
-        // LinkedHashMap
+    VTable(String n) {
+        name = n;
+        methods = new LinkedHashMap<String, Integer>();
+        variables = new LinkedHashMap<String, Integer>();
     }
 
     void addMethod() {
@@ -633,12 +635,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             // ST.print();
         } else {
-            n.f0.accept(this, null); // "class"
-            String classname = n.f1.accept(this, null);
-            n.f2.accept(this, classname); // "{"
-            n.f3.accept(this, classname); // variables
-            n.f4.accept(this, classname); // methods
-            n.f5.accept(this, classname); // "}"
+
         }
         return null;
     }
@@ -666,14 +663,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             // ST.print();
         } else {
-            n.f0.accept(this, null); // "class"
-            String classname = n.f1.accept(this, null);
-            n.f2.accept(this, classname); // "extends"
-            String parent = n.f3.accept(this, classname);
-            n.f4.accept(this, classname); // "{"
-            n.f5.accept(this, classname); // variables
-            n.f6.accept(this, classname); // methods
-            n.f7.accept(this, classname); // "}"
+
         }
         return null;
     }
@@ -718,13 +708,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             n.f2.accept(this, argu); // ";"
         } else {
-            String type = n.f0.accept(this, argu); // variable type
-            String name = n.f1.accept(this, argu); // argument name
-            n.f2.accept(this, argu); // ";"
-            // System.out.println(type + " " + name);
-            if (!type.equals("int") && !type.equals("boolean") && !type.equals("int[]"))
-                if (ST.getClass(type) == null)
-                    throw new TypeCheckError("[ERROR] " + type + " does not name a type");
 
             // System.out.println("type:" + type + " exists");
         }
@@ -780,66 +763,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f11.accept(this, argu + "->" + myName); // ";"
             n.f12.accept(this, argu + "->" + myName); // "}"
         } else {
-            n.f0.accept(this, argu); // "public"
-            String myType = n.f1.accept(this, argu); // method type
 
-            String myName = n.f2.accept(this, argu); // method name
-
-            if (!myType.equals("int") && !myType.equals("String") && !myType.equals("boolean"))
-                if (ST.getClass(myType) == null)
-                    throw new TypeCheckError("[ERROR] " + myType + " does not name a type");
-
-            n.f3.accept(this, argu); // "("
-            String argumentList = n.f4.present() ? n.f4.accept(this, argu) : "";
-
-            String[] arguments = argumentList.split(",");
-            for (String arg : arguments) {
-                String[] a = arg.split("\\s");
-                String aType = "";
-                String aName = "";
-                int count = 1;
-                for (int i = 0; i < a.length; i++) {
-                    if (count == 1)
-                        aType = a[i];
-                    else
-                        aName = a[i];
-
-                    if (a[i].length() != 0)
-                        count = 2;
-                }
-                if (count == 2)
-                    if (!aType.equals("int") && !aType.equals("int[]") && !aType.equals("boolean"))
-                        if (ST.getClass(aType) == null)
-                            throw new TypeCheckError("[ERROR] " + aType + " does not name a type");
-
-            }
-            if (ST.lookupSameMethodInParents(ST, argu, myName) == 0)
-                throw new TypeCheckError("[ERROR] " + argu + "." + myName + " Overridden method does not match");
-
-            n.f5.accept(this, argu + "->" + myName); // ")"
-            n.f6.accept(this, argu + "->" + myName); // "{"
-            n.f7.accept(this, argu + "->" + myName); // variables
-            n.f8.accept(this, argu + "->" + myName); // statements
-            n.f9.accept(this, argu + "->" + myName); // "return"
-            String r = n.f10.accept(this, argu + "->" + myName); // expresion
-            String rType = ST.lookup(argu, myName, r);
-
-            // System.out.println("rType " + rType + " r " + r);
-            String[] rTypeCheck = r.split("\\s");
-            if (rTypeCheck[0].equals("return")) {
-                rType = rTypeCheck[1];
-                System.out.println("Changed " + rType);
-            }
-            // System.out.println("rType " + rType + " r " + r);
-            if (!myType.equals(r)) {
-                if (!myType.equals(rType))
-                    throw new TypeCheckError("[ERROR] " + argu + "." + myName + " Return type is " + myType
-                            + " but it is returned " + rType + r);
-
-            }
-            // System.out.println(argu + "." + myName + ":Correct return type");
-            n.f11.accept(this, argu + "->" + myName); // ";"
-            n.f12.accept(this, argu + "->" + myName); // "}"
         }
         return null;
     }
@@ -885,12 +809,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
             String type = n.f0.accept(this, null);
             String name = n.f1.accept(this, null); // method name
 
-            // System.out.println(type + " " + name);
-            if (!type.equals("int") && !type.equals("boolean") && !type.equals("int[]")) {
-                if (ST.getClass(type) == null)
-                    throw new TypeCheckError("[ERROR] " + type + " does not name a type");
-
-            }
             // System.out.println("type:" + type + " exists");
             return type + " " + name;
         } else {
@@ -905,34 +823,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(PrintStatement n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String expr = n.f2.accept(this, argu);
-            String[] exprCheck = expr.split("\\s+");
-            String exprType = ST.lookup(classname, methname, expr);
-            if (exprCheck[0].equals("return")) {
-                exprType = exprCheck[1];
-            }
-            if (!exprType.equals("int")) {
-                if (!expr.equals("int"))
-                    throw new TypeCheckError("[ERROR] Print statement can print only integers not " + exprType);
-
-            }
-            n.f3.accept(this, argu);
-            n.f4.accept(this, argu);
             return null;
         } else {
             n.f0.accept(this, argu);
@@ -951,32 +842,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(ArrayLength n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String expr = n.f0.accept(this, argu);
-            String[] exprCheck = expr.split("\\s+");
-            String exprType = ST.lookup(classname, methname, expr);
-            if (exprCheck[0].equals("return")) {
-                exprType = exprCheck[1];
-            }
-            if (!exprType.equals("int[]")) {
-                if (!expr.equals("int[]"))
-                    throw new TypeCheckError("[ERROR] Print statement can print only integers not " + exprType);
-
-            }
-            n.f1.accept(this, argu);
-            n.f2.accept(this, argu);
             return "return int";
         } else {
             n.f0.accept(this, argu);
@@ -1057,78 +923,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(AssignmentStatement n, String argu) throws Exception {
         // System.out.println("AssignmentStatement");
         if (ST.getState() == 1) {
-            String varName1 = n.f0.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String r1 = ST.lookup(classname, methname, varName1);
-            if (r1 == "")
-                throw new TypeCheckError("[ERROR] " + varName1 + " has not been declared");
-
-            // System.out.println("var: " + varName1 + " has been declared with type " +
-            // r1);
-
-            n.f1.accept(this, argu);
-            String var2 = n.f2.accept(this, argu);
-            String[] checkForAllocation = var2.split("\\s");
-
-            if (checkForAllocation[0].equals("return")) {
-                if (!r1.equals(checkForAllocation[1]))
-                    throw new TypeCheckError("[ERROR] Assignment with type " + checkForAllocation[1] + " in variable "
-                            + varName1 + " which is type of " + r1);
-
-                // System.out.println("Assignment OK");
-            } else {
-                // System.out.println("var2 = " + var2);
-                String r2 = ST.lookup(classname, methname, var2);
-                // System.out.println("varName1: " + varName1 + " r1: " + r1 + " var2: " + var2
-                // + " r2: " + r2);
-                if (r1.equals("int") && !var2.equals("int") && !r2.equals("int"))
-                    throw new TypeCheckError(
-                            "[ERROR] " + varName1 + " is type of int,cannot be assinged with " + r2 + " " + var2);
-
-                else if (r1.equals("boolean") && !var2.equals("boolean") && !r2.equals("boolean"))
-                    throw new TypeCheckError(
-                            "[ERROR] " + varName1 + " is type of boolean,cannot be assinged with " + r2 + " " + var2);
-
-                else if (r1.equals("int[]") && !var2.equals("int[]") && !r2.equals("int[]"))
-                    throw new TypeCheckError(
-                            "[ERROR] " + varName1 + " is type of int[],cannot be assinged with " + r2 + " " + var2);
-
-                else if (r2 == "" && !var2.equals("int") && !var2.equals("boolean") && !var2.equals("int[]"))
-                    throw new TypeCheckError("[ERROR] " + var2 + " has not been declared");
-
-                else if (!r2.equals(r1) && !r2.equals("")) {
-                    ST_Class temp = ST.getClass(r2);
-                    boolean flag = false;
-                    while (temp != null) {
-                        // System.out.println(temp.getName());
-                        if (!temp.getName().equals(r1)) {
-                            temp = temp.getParent();
-                        } else {
-                            flag = true;
-                            // System.out.println("true " + temp.getName());
-                            break;
-                        }
-                    }
-                    if (!flag)
-                        throw new TypeCheckError(
-                                "[ERROR] " + varName1 + " is type of " + r1 + " , cannot be assinged with an " + r2);
-
-                }
-                // System.out.println("Assignment OK");
-                n.f3.accept(this, argu);
-            }
 
         } else {
             n.f0.accept(this, argu);
@@ -1146,41 +940,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(ArrayAssignmentStatement n, String argu) throws Exception {
         // System.out.println("ArrayAssignmentStatement");
         if (ST.getState() == 1) {
-            String array = n.f0.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String arrayType = ST.lookup(classname, methname, array);
-            if (!arrayType.equals("int[]"))
-                throw new TypeCheckError("[ERROR] " + array + " is not of type int[]");
-
-            n.f1.accept(this, argu);
-            String pos = n.f2.accept(this, argu);
-            String posType = ST.lookup(classname, methname, pos);
-            // System.out.println(pos);
-            if (!pos.equals("int") && !posType.equals("int") && !pos.equals("return int")
-                    && !posType.equals("return int"))
-                throw new TypeCheckError("[ERROR] In array " + array + " assignment position must be type of int");
-
-            n.f3.accept(this, argu);
-            n.f4.accept(this, argu);
-            String assignment = n.f5.accept(this, argu);
-            String assignmentType = ST.lookup(classname, methname, assignment);
-            if (!assignmentType.equals("int") && !assignment.equals("int") && !assignmentType.equals("return int")
-                    && !assignment.equals("return int"))
-                throw new TypeCheckError("[ERROR] In array " + array + " assignment must be only int values");
-
-            n.f6.accept(this, argu);
             return null;
         } else {
             n.f0.accept(this, argu);
@@ -1200,33 +960,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(ArrayLookup n, String argu) throws Exception {
         // System.out.println("ArrayLookup");
         if (ST.getState() == 1) {
-            String array = n.f0.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String arrayType = ST.lookup(classname, methname, array);
-            if (!arrayType.equals("int[]"))
-                throw new TypeCheckError("[ERROR] " + array + " is not of type int[]");
-
-            n.f1.accept(this, argu);
-            String pos = n.f2.accept(this, argu);
-            String posType = ST.lookup(classname, methname, pos);
-            // System.out.println(pos + " " + posType);
-            if (!pos.equals("int") && !posType.equals("int") && !pos.equals("return int")
-                    && !posType.equals("return int"))
-                throw new TypeCheckError("[ERROR] In array " + array + " lookup position must be type of int");
-
-            n.f3.accept(this, argu);
             return "return int";
         } else {
             n.f0.accept(this, argu);
@@ -1244,35 +978,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(IfStatement n, String argu) throws Exception {
         // System.out.println("IF");
         if (ST.getState() == 1) {
-            n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String ifExpr = n.f2.accept(this, argu);
-            String t = ST.lookup(classname, methname, ifExpr);
-            // System.out.println(t + " " + ifExpr);
-            if (!t.equals("boolean") && !ifExpr.equals("return boolean") && !t.equals("return boolean"))
-                // System.out.println(t + " " + ifExpr);
-                throw new TypeCheckError(
-                        "[ERROR] If statement must have as condition boolean or messageSend that returns boolean");
-
-            n.f3.accept(this, argu);
-            n.f4.accept(this, argu);
-            // System.out.println("If else");
-            n.f5.accept(this, argu);
-            n.f6.accept(this, argu);
-            // System.out.println("IF OK");
             return null;
         } else {
             n.f0.accept(this, argu);
@@ -1293,30 +999,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(WhileStatement n, String argu) throws Exception {
         // System.out.println("WHILE");
         if (ST.getState() == 1) {
-            n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            String whileExpr = n.f2.accept(this, argu);
-            String t = ST.lookup(classname, methname, whileExpr);
-            if (!t.equals("boolean") && !whileExpr.equals("return boolean") && !t.equals("return boolean"))
-                throw new TypeCheckError(
-                        "[ERROR] While statement must have as condition boolean or messageSend that returns boolean");
-
-            n.f3.accept(this, argu);
-            n.f4.accept(this, argu);
-            // System.out.println("WHILE OK");
             return null;
         } else {
             n.f0.accept(this, argu);
@@ -1353,86 +1036,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(MessageSend n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            String object = n.f0.accept(this, argu);
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-
-            String objectType = ST.lookup(classname, methname, object);
-            // System.out.println(object);
-            String[] check = object.split("\\s");
-            if (check[0].equals("return"))
-                objectType = check[1];
-            else if (objectType.equals(""))
-                throw new TypeCheckError("[ERROR] " + object + " has not been declared");
-
-            // System.out.println("object " + object + " is type of " + objectType);
-            n.f1.accept(this, argu);
-
-            String func = n.f2.accept(this, argu);
-            ST_Method funcObj = ST.lookupMethod(objectType, func);
-            if (funcObj == null)
-                throw new TypeCheckError(
-                        "[ERROR] Method " + func + " is not a member of the class " + objectType + " and his parents");
-
-            String funcType = funcObj.getType();
-
-            // System.out.println(func);
-            n.f3.accept(this, argu);
-            String l = n.f4.accept(this, argu);
-            LinkedList<String> args = new LinkedList<String>();
-            if (l != null) {
-                // System.out.println("list=[" + l + "]");
-                String[] list = l.split(",");
-                for (String li : list) {
-                    li = li.trim();
-                    if (!li.equals("int") && !li.equals("int[]") && !li.equals("boolean") && !li.equals("return int")
-                            && !li.equals("return int[]") && !li.equals("return boolean")) {
-                        String[] liNoReturn = li.split("\\s");
-                        if (liNoReturn[0].equals("return")) {
-                            args.add(liNoReturn[1]);
-                        } else {
-                            String t = ST.lookup(classname, methname, li);
-                            if (t.equals(""))
-                                throw new TypeCheckError(
-                                        "[ERROR] MessageSend " + func + " argument " + li + " has not been declared");
-
-                            args.add(t);
-                        }
-                    } else {
-                        String[] liNoReturn = li.split("\\s");
-                        if (liNoReturn[0].equals("return")) {
-                            args.add(liNoReturn[1]);
-                        } else {
-                            args.add(li);
-                        }
-                    }
-                }
-                if (!funcObj.compareArgs(ST, args))
-                    throw new TypeCheckError("[ERROR] MessageSend " + func + " arguments are not the same");
-
-                // System.out.println("true");
-                n.f5.accept(this, argu);
-                return "return " + funcType;
-            } else {
-                // System.out.println("list empty");
-                if (!funcObj.compareArgs(ST, args))
-                    throw new TypeCheckError("[ERROR] MessageSend " + func + " arguments are not the same");
-
-                // System.out.println("true");
-                n.f5.accept(this, argu);
-                return "return " + funcType;
-            }
+            return null;
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1440,8 +1045,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f3.accept(this, argu);
             n.f4.accept(this, argu);
             n.f5.accept(this, argu);
-            return null;
 
+            return null;
         }
     }
 
@@ -1491,32 +1096,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(NotExpression n, String argu) throws Exception {
         // System.out.println("Not");
         if (ST.getState() == 1) {
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            n.f0.accept(this, argu);
-            String expr = n.f1.accept(this, argu);
-            String exprType = ST.lookup(classname, methname, expr);
-            // System.out.println(expr);
-            String[] check = expr.split("\\s");
-            if (check[0].equals("return")) {
-                exprType = check[1];
-            } else if (exprType.equals(""))
-                throw new TypeCheckError("[ERROR] " + expr + " has not been declared");
-
-            // System.out.println("expr " + expr + " is type of " + exprType);
-
-            // System.out.println("not " + exprType);
             return "return boolean";
         } else {
             n.f0.accept(this, argu);
@@ -1530,59 +1110,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(PlusExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            // System.out.println("PlusExpression");
-            String l = n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String r = n.f2.accept(this, argu);
-
-            l = l.trim();
-            r = r.trim();
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            // System.out.println(l + " " + r);
-            String[] le = l.split("\\s");
-            String[] ri = r.split("\\s");
-            if (le[0].equals("return"))
-                l = le[1];
-            else
-                l = le[0];
-
-            if (ri[0].equals("return"))
-                r = ri[1];
-            else
-                r = ri[0];
-            String left = l;
-            String right = r;
-
-            if (!l.equals("int") && !l.equals("int[]")) {
-                left = ST.lookup(classname, methname, l);
-            }
-            if (!r.equals("int") && !r.equals("int[]")) {
-                right = ST.lookup(classname, methname, r);
-            }
-
-            if (!left.equals("int"))
-                throw new TypeCheckError("[ERROR] PLUS must have int");
-
-            if (!right.equals("int"))
-                throw new TypeCheckError("[ERROR] PLUS must have int");
-
-            if (!left.equals(right))
-                throw new TypeCheckError("[ERROR] PLUS must have the same type in each side");
 
             return "return int";
-
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1596,59 +1125,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(MinusExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            // System.out.println("MinusExpression");
-            String l = n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String r = n.f2.accept(this, argu);
-
-            l = l.trim();
-            r = r.trim();
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            // System.out.println(l + " " + r);
-            String[] le = l.split("\\s");
-            String[] ri = r.split("\\s");
-            if (le[0].equals("return"))
-                l = le[1];
-            else
-                l = le[0];
-
-            if (ri[0].equals("return"))
-                r = ri[1];
-            else
-                r = ri[0];
-            String left = l;
-            String right = r;
-
-            if (!l.equals("int") && !l.equals("int[]")) {
-                left = ST.lookup(classname, methname, l);
-            }
-            if (!r.equals("int") && !r.equals("int[]")) {
-                right = ST.lookup(classname, methname, r);
-            }
-
-            if (!left.equals("int"))
-                throw new TypeCheckError("[ERROR] MINUS must have int1");
-
-            if (!right.equals("int"))
-                throw new TypeCheckError("[ERROR] MINUS must have int2");
-
-            if (!left.equals(right))
-                throw new TypeCheckError("[ERROR] MINUS must have the same type in each side");
 
             return "return int";
-
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1662,60 +1140,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(TimesExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            // System.out.println("TimesExpression");
-            String l = n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String r = n.f2.accept(this, argu);
-
-            l = l.trim();
-            r = r.trim();
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            // System.out.println(l + " " + r);
-            String[] le = l.split("\\s");
-            String[] ri = r.split("\\s");
-            if (le[0].equals("return"))
-                l = le[1];
-            else
-                l = le[0];
-
-            if (ri[0].equals("return"))
-                r = ri[1];
-            else
-                r = ri[0];
-
-            String left = l;
-            String right = r;
-            // System.out.println(left + " " + right);
-            if (!l.equals("int") && !l.equals("int[]")) {
-                left = ST.lookup(classname, methname, l);
-            }
-            if (!r.equals("int") && !r.equals("int[]")) {
-                right = ST.lookup(classname, methname, r);
-            }
-
-            if (!left.equals("int"))
-                throw new TypeCheckError("[ERROR] Times is allowed only in int types");
-
-            if (!right.equals("int"))
-                throw new TypeCheckError("[ERROR] Times is allowed only in int types");
-
-            if (!left.equals(right))
-                throw new TypeCheckError("[ERROR] Times is allowed only in int types");
 
             return "return int";
-
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1729,34 +1155,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(AndExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            // System.out.println("AND &&");
-            String l = n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            String r = n.f2.accept(this, argu);
-
-            l = l.trim();
-            r = r.trim();
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            // System.out.println(l + " " + r);
-            String left = l;
-            String right = r;
-            // System.out.println(left + " " + right);
-            if (!l.equals("boolean") && !l.equals("return boolean"))
-                left = ST.lookup(classname, methname, l);
-            if (!r.equals("boolean") && !r.equals("return boolean"))
-                right = ST.lookup(classname, methname, r);
 
             return "return boolean";
         } else {
@@ -1773,32 +1171,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(ArrayAllocationExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
 
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            // System.out.println(classname + " " + methname);
-            n.f0.accept(this, argu);
-            n.f1.accept(this, argu);
-            n.f2.accept(this, argu);
-            String pos = n.f3.accept(this, argu);
-            String posType = ST.lookup(classname, methname, pos);
-            // System.out.println(pos + " " + posType);
-            if (!pos.equals("int") && !posType.equals("int") && !pos.equals("return int")
-                    && !posType.equals("return int"))
-                throw new TypeCheckError("[ERROR] In array ArrayAllocationExpression size must be type of int");
-
-            // System.out.println(pos);
-            n.f4.accept(this, argu);
             return "return int[]";
         } else {
             n.f0.accept(this, argu);
@@ -1807,7 +1180,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f3.accept(this, argu);
             n.f4.accept(this, argu);
             return null;
-
         }
     }
 
@@ -1816,28 +1188,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(AllocationExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-            n.f0.accept(this, argu);
-            String id = n.f1.accept(this, argu);
 
-            String[] scope = argu.split("->");
-            String classname = "";
-            String methname = "";
-            int count = 1;
-            for (int i = 0; i < scope.length; i++) {
-                if (count == 1)
-                    classname = scope[i];
-                else
-                    methname = scope[i];
-
-                if (scope[i].length() != 0)
-                    count = 2;
-            }
-            if (ST.getClass(id) == null)
-                throw new TypeCheckError("[ERROR] Allocation type " + id + " didnt found");
-
-            n.f2.accept(this, argu);
-            n.f3.accept(this, argu);
-            return "return " + id;
+            return "return ";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);

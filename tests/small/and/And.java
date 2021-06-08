@@ -1,9 +1,9 @@
 class And {
-	public static void main(String[] a) {
-	    boolean b;
-	    boolean c;
-	    int x;
-	    
+    public static void main(String[] a) {
+        boolean b;
+        boolean c;
+        int x;
+
         b = false;
         c = true;
 
@@ -12,6 +12,6 @@ class And {
         else
             x = 1;
 
-	    System.out.println(x);
-	}
+        System.out.println(x);
+    }
 }
