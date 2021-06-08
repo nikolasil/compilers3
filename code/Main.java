@@ -54,6 +54,22 @@ class TypeCheckError extends Exception {
     }
 }
 
+class VTable {
+    VTable() {
+        // LinkedHashMap
+    }
+
+    void addMethod() {
+    }
+
+    void addVariable() {
+    }
+
+    String name;
+    Map<String, Integer> methods;
+    Map<String, Integer> variables;
+}
+
 class SymbolTable {
     Map<String, ST_Class> classes;
     int state; // 0 = fill table , 1 = type check
@@ -568,6 +584,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f16.accept(this, classname + "->main"); // "}"
             n.f17.accept(this, classname + "->main"); // "}"
         } else {
+            // create vtable and print to file.ll
             n.f0.accept(this, null); // "class"
             String classname = n.f1.accept(this, null);
             n.f2.accept(this, classname); // "{"
