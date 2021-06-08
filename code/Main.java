@@ -24,12 +24,13 @@ public class Main {
 
                 System.err.println("Program parsed successfully.");
                 SymbolTable st = new SymbolTable();
-                MyVisitor declarationST = new MyVisitor(st);
-                MyVisitor typeChecking = new MyVisitor(st);
+                Map<String, VTable> offsets = new LinkedHashMap<String, VTable>();
+                MyVisitor declarationST = new MyVisitor(st, offsets);
+                MyVisitor llvm = new MyVisitor(st, offsets);
 
                 root.accept(declarationST, null);
-                System.out.println("\nType Checking Started");
-                root.accept(typeChecking, null);
+                System.out.println("\nllvm code creation Started");
+                root.accept(llvm, null);
             } catch (TypeCheckError ex) {
                 System.out.println(ex.getMessage());
             } catch (ParseException ex) {
@@ -61,10 +62,12 @@ class VTable {
         variables = new LinkedHashMap<String, Integer>();
     }
 
-    void addMethod() {
+    void addMethod(String mName, Integer offset) {
+        this.methods.put(mName, offset);
     }
 
-    void addVariable() {
+    void addVariable(String vName, Integer offset) {
+        this.variables.put(vName, offset);
     }
 
     String name;
@@ -89,7 +92,7 @@ class SymbolTable {
         return this.state;
     }
 
-    void printOffset() {
+    void createOffsets(Map<String, VTable> offsets) {
         System.out.println("-- [START PRINTING OFFSETS] --");
         Map<String, ST_Class> visited = new LinkedHashMap<String, ST_Class>();
         String main = this.classes.keySet().iterator().next();
@@ -526,9 +529,11 @@ class ST_Method {
 
 class MyVisitor extends GJDepthFirst<String, String> {
     SymbolTable ST;
+    Map<String, VTable> offsets;
 
-    MyVisitor(SymbolTable S) {
+    MyVisitor(SymbolTable S, Map<String, VTable> o) {
         ST = S;
+        offsets = o;
     }
 
     public String visit(Goal n, String argu) throws Exception {
@@ -539,7 +544,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
         if (ST.getState() == 1) {
             System.out.println("Type Checking Ended Successfully\n");
-            ST.printOffset();
+            ST.createOffsets(offsets);
         }
         ST.setState(1);
         return null;
