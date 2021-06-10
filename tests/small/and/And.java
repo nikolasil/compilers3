@@ -15,3 +15,35 @@ class And {
         System.out.println(x);
     }
 }
+
+class test {
+    int x;
+    boolean k;
+    boolean k2;
+    int k3;
+
+    public int func() {
+        int y;
+        y = 2;
+        return y;
+    }
+}
+
+class test2 extends test {
+    int x;
+    boolean k;
+    boolean k2;
+    int k3;
+
+    public int func() {
+        int y;
+        y = 2;
+        return y;
+    }
+
+    public int func2() {
+        int y;
+        y = 2;
+        return y;
+    }
+}

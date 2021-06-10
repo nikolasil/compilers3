@@ -56,10 +56,14 @@ class TypeCheckError extends Exception {
 }
 
 class VTable {
+    String name;
+    Map<String, Integer> methods;
+    Map<String, Integer> variables;
+
     VTable(String n) {
         name = n;
-        methods = new LinkedHashMap<String, Integer>();
         variables = new LinkedHashMap<String, Integer>();
+        methods = new LinkedHashMap<String, Integer>();
     }
 
     void addMethod(String mName, Integer offset) {
@@ -70,9 +74,25 @@ class VTable {
         this.variables.put(vName, offset);
     }
 
-    String name;
-    Map<String, Integer> methods;
-    Map<String, Integer> variables;
+    void print() {
+        System.out.println(name);
+        System.out.println("\t -- [Variables] --");
+        if (this.variables.size() == 0)
+            System.out.println("\tnone");
+        else {
+            for (String name : this.variables.keySet()) {
+                System.out.println("\t" + this.variables.get(name) + " " + name);
+            }
+        }
+        System.out.println("\n\t -- [Methods] --");
+        if (this.methods.size() == 0)
+            System.out.println("\tnone");
+        else {
+            for (String name : this.methods.keySet()) {
+                System.out.println("\t" + this.methods.get(name) + " " + name);
+            }
+        }
+    }
 }
 
 class SymbolTable {
@@ -98,8 +118,12 @@ class SymbolTable {
         String main = this.classes.keySet().iterator().next();
         // System.out.println(main);
         for (String name : this.classes.keySet()) {
-            if (name.equals(main))
+            if (name.equals(main)) {
+                VTable mainV = new VTable(main);
+                mainV.addMethod("main", 0);
+                offsets.put(name, mainV);
                 continue;
+            }
             if (visited.containsKey(name))
                 continue;
 
@@ -111,12 +135,19 @@ class SymbolTable {
                 if (visited.containsKey(Cname))
                     continue;
                 System.out.println("-----------Class " + Cname + "-----------");
+
+                VTable table = new VTable(Cname);
+                offsets.put(Cname, table);
+
                 Map<String, String> atr = C.getAtributes();
                 System.out.println("---Variables---");
                 for (String at : atr.keySet()) {
                     if (at.equals("this"))
                         continue;
+
                     System.out.println(Cname + "." + at + " : " + offset_var);
+                    table.addVariable(at, offset_var);
+
                     if (atr.get(at).equals("int"))
                         offset_var += 4;
                     else if (atr.get(at).equals("boolean"))
@@ -133,6 +164,7 @@ class SymbolTable {
                         continue;
 
                     System.out.println(Cname + "." + me + " : " + offset_func);
+                    table.addMethod(me, offset_func);
                     offset_func += 8;
                 }
                 visited.put(Cname, C);
@@ -549,6 +581,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
             ST.setState(1);
             ST.print();
             ST.createOffsets(offsets);
+            for (String name : offsets.keySet()) {
+                offsets.get(name).print();
+                System.out.println();
+            }
         }
         return null;
 
