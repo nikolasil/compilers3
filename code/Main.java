@@ -4,6 +4,7 @@ import visitor.*;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.*;
 import java.util.*;
 
 public class Main {
@@ -25,12 +26,16 @@ public class Main {
                 System.err.println("Program parsed successfully.");
                 SymbolTable st = new SymbolTable();
                 Map<String, VTable> offsets = new LinkedHashMap<String, VTable>();
-                MyVisitor declarationST = new MyVisitor(st, offsets);
-                MyVisitor llvm = new MyVisitor(st, offsets);
+
+                FileWriter myWriter = new FileWriter(args[i].substring(0, args[i].length() - 5) + "2.ll");
+
+                MyVisitor declarationST = new MyVisitor(st, offsets, myWriter);
+                MyVisitor llvm = new MyVisitor(st, offsets, myWriter);
 
                 root.accept(declarationST, null);
                 System.out.println("\nllvm code creation Started");
                 root.accept(llvm, null);
+                myWriter.close();
             } catch (TypeCheckError ex) {
                 System.out.println(ex.getMessage());
             } catch (ParseException ex) {
@@ -562,10 +567,12 @@ class ST_Method {
 class MyVisitor extends GJDepthFirst<String, String> {
     SymbolTable ST;
     Map<String, VTable> offsets;
+    FileWriter myWriter;
 
-    MyVisitor(SymbolTable S, Map<String, VTable> o) {
+    MyVisitor(SymbolTable S, Map<String, VTable> o, FileWriter writer) {
         ST = S;
         offsets = o;
+        myWriter = writer;
     }
 
     public String visit(Goal n, String argu) throws Exception {
@@ -576,7 +583,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
         if (ST.getState() == 1) {
             System.out.println("llvm code created Successfully\n");
-            // ST.createOffsets(offsets);
         } else {
             ST.setState(1);
             ST.print();
@@ -630,9 +636,48 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f16.accept(this, classname + "->main"); // "}"
             n.f17.accept(this, classname + "->main"); // "}"
         } else {
-            // create vtable and print to file.ll
             n.f0.accept(this, null); // "class"
             String classname = n.f1.accept(this, null);
+            // myWriter.write("@." + classname + "_vtable = global [0 x i8*] []\n");
+            String first = offsets.keySet().iterator().next();
+            for (String name : offsets.keySet()) {
+                if (name == first)
+                    myWriter.write("@." + name + "_vtable = global [0 x i8*] []\n");
+                else
+                    myWriter.write(
+                            "@." + name + "_vtable = global [" + offsets.get(name).methods.size() + " x i8*] []\n");
+            }
+            myWriter.write("\ndeclare i8* @calloc(i32, i32)\n");
+            myWriter.write("declare i32 @printf(i8*, ...)\n");
+            myWriter.write("declare void @exit(i32)\n");
+            myWriter.write("\n@_cint = constant [4 x i8] c\"%d\\0a\\00\"\n");
+            myWriter.write("@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
+            myWriter.write("@_cNSZ = constant [15 x i8] c\"Negative size\\0a\\00\"\n");
+            myWriter.write("define void @print_int(i32 %i) {\n");
+            myWriter.write("    %_str = bitcast [4 x i8]* @_cint to i8*\n");
+            myWriter.write("    call i32 (i8*, ...) @printf(i8* %_str, i32 %i)\n");
+            myWriter.write("    ret void\n");
+            myWriter.write("}\n");
+            myWriter.write("\ndefine void @throw_oob() {\n");
+            myWriter.write("    %_str = bitcast [15 x i8]* @_cOOB to i8*\n");
+            myWriter.write("    call i32 (i8*, ...) @printf(i8* %_str)\n");
+            myWriter.write("    call void @exit(i32 1)\n");
+            myWriter.write("    ret void\n");
+            myWriter.write("}\n");
+            myWriter.write("\ndefine void @throw_nsz() {\n");
+            myWriter.write("    %_str = bitcast [15 x i8]* @_cNSZ to i8*\n");
+            myWriter.write("    call i32 (i8*, ...) @printf(i8* %_str)\n");
+            myWriter.write("    call void @exit(i32 1)\n");
+            myWriter.write("    ret void\n");
+            myWriter.write("}\n");
+            myWriter.write("\ndefine void @throw_nsz() {\n");
+            myWriter.write("    %_str = bitcast [15 x i8]* @_cNSZ to i8*\n");
+            myWriter.write("    call i32 (i8*, ...) @printf(i8* %_str)\n");
+            myWriter.write("    call void @exit(i32 1)\n");
+            myWriter.write("    ret void\n");
+            myWriter.write("}\n");
+            myWriter.write("\n");
+
             n.f2.accept(this, classname); // "{"
             n.f3.accept(this, classname); // "public"
             n.f4.accept(this, classname); // "static"
@@ -645,8 +690,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f10.accept(this, classname); // "]"
 
             String argumentName = n.f11.accept(this, classname); // argument name
-
-            // insert the argument to the main method
 
             n.f12.accept(this, classname); // ")"
             n.f13.accept(this, classname); // "{"
@@ -676,8 +719,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f3.accept(this, classname); // variables
             n.f4.accept(this, classname); // methods
             n.f5.accept(this, classname); // "}"
-
-            // ST.print();
         } else {
 
         }
