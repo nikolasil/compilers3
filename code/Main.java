@@ -292,12 +292,12 @@ class SymbolTable {
     }
 
     void print() {
-        System.out.println("-- [START PRINTING] --");
+        System.out.println("-- [START PRINTING SYMBOLTABLE] --");
         for (String name : this.classes.keySet()) {
             this.classes.get(name).print();
             System.out.println();
         }
-        System.out.println("-- [END PRINTING] --");
+        System.out.println("-- [END PRINTING SYMBOLTABLE] --");
     }
 
 }
@@ -543,10 +543,13 @@ class MyVisitor extends GJDepthFirst<String, String> {
         n.f2.accept(this, argu);
 
         if (ST.getState() == 1) {
-            System.out.println("Type Checking Ended Successfully\n");
+            System.out.println("llvm code created Successfully\n");
+            // ST.createOffsets(offsets);
+        } else {
+            ST.setState(1);
+            ST.print();
             ST.createOffsets(offsets);
         }
-        ST.setState(1);
         return null;
 
     }
