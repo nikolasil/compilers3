@@ -959,10 +959,11 @@ class MyVisitor extends GJDepthFirst<String, String> {
             exp_res_ = 0;
             if_else_ = 0;
             if_then_ = 0;
+            if_end_ = 0;
             n.f0.accept(this, argu); // "public"
             String myType = n.f1.accept(this, argu); // method type
             String myName = n.f2.accept(this, argu); // method name
-            myWriter.write("define " + getBits(myType) + " @" + argu + "." + myName + "(i8* %this");
+            myWriter.write("\ndefine " + getBits(myType) + " @" + argu + "." + myName + "(i8* %this");
             n.f3.accept(this, argu); // "("
 
             String argumentList = n.f4.present() ? n.f4.accept(this, argu) : "";
@@ -985,13 +986,46 @@ class MyVisitor extends GJDepthFirst<String, String> {
                 if (!aName.equals("") && !aType.equals(""))
                     myWriter.write(", " + getBits(aType) + " %." + aName);
             }
-            myWriter.write(") {\n");
+            myWriter.write(") {");
+            for (String arg : arguments) {
+                String[] a = arg.split("\\s");
+                String aType = "";
+                String aName = "";
+                int count = 1;
+                for (int i = 0; i < a.length; i++) {
+                    if (count == 1)
+                        aType = a[i];
+                    else
+                        aName = a[i];
+
+                    if (a[i].length() != 0)
+                        count = 2;
+                }
+
+                if (!aName.equals("") && !aType.equals("")) {
+                    myWriter.write("\n\t%" + aName + " alloca " + getBits(aType));
+                    myWriter.write(
+                            "\n\tstore " + getBits(aType) + " %." + aName + ", " + getBits(aType) + "* %" + aName);
+                }
+            }
+            myWriter.write("\n\n");
             n.f5.accept(this, argu); // ")"
             n.f6.accept(this, argu); // "{"
             n.f7.accept(this, argu + "->" + myName); // variables
             n.f8.accept(this, argu + "->" + myName); // statements
             n.f9.accept(this, argu + "->" + myName); // "return"
-            n.f10.accept(this, argu + "->" + myName); // expresion
+            String r = n.f10.accept(this, argu + "->" + myName); // expresion
+            String rType = ST.lookup(argu, myName, r);
+
+            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
+                myWriter.write("\tret " + getBits(myType) + " %" + r + "\n");
+            } else if (ST.location.equals("outside")) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(argu).variables.get(r) + 8) + "\n");
+                myWriter.write(
+                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(rType) + "*\n");
+                myWriter.write("\tret " + getBits(myType) + " %_" + (register - 1) + "\n");
+            }
             n.f11.accept(this, argu + "->" + myName); // ";"
             n.f12.accept(this, argu + "->" + myName); // "}"
             myWriter.write("}\n");
@@ -1150,6 +1184,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(AssignmentStatement n, String argu) throws Exception {
         // System.out.println("AssignmentStatement");
         if (ST.getState() == 1) {
+            String expr = n.f2.accept(this, argu);
             String identifier = n.f0.accept(this, argu);
             String[] scope = argu.split("->");
 
@@ -1164,7 +1199,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
                 leftPart = false;
             }
             n.f1.accept(this, argu);
-            String expr = n.f2.accept(this, argu);
             String exprType = ST.lookup(scope[0], scope[1], expr);
             boolean rightPart = true;
             if (ST.location.equals("dontexists")) {
@@ -1439,9 +1473,59 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(TimesExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
+            String[] scope = argu.split("->");
+            String identifier1 = n.f0.accept(this, argu);
+            String idType1 = ST.lookup(scope[0], scope[1], identifier1);
+            boolean isLiteral1 = false;
+            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load " + getBits(idType1) + ", " + getBits(idType1) + "* %"
+                        + identifier1 + "\n");
+            } else if (ST.location.equals("outside")) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(scope[0]).variables.get(identifier1) + 8) + "\n");
+                myWriter.write(
+                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(idType1) + "*\n");
+            } else {
+                System.out.println("is literal");
+                isLiteral1 = true;
+            }
+            n.f1.accept(this, argu);
+            String identifier2 = n.f2.accept(this, argu);
+            String idType2 = ST.lookup(scope[0], scope[1], identifier2);
+            boolean wasOutside2 = false;
+            boolean isLiteral2 = false;
+            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load " + getBits(idType2) + ", " + getBits(idType2) + "* %"
+                        + identifier2 + "\n");
+            } else if (ST.location.equals("outside")) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(scope[0]).variables.get(identifier2) + 8) + "\n");
+                myWriter.write(
+                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(idType2) + "*\n");
+                wasOutside2 = true;
+            } else {
+                isLiteral2 = true;
+            }
 
-            return "int";
-        } else {
+            if (isLiteral1 && !isLiteral2)
+                myWriter.write("\t%_" + register++ + " = mul i32 " + identifier1 + ", %_" + (register - 2) + "\n");
+            else if (!isLiteral1 && isLiteral2)
+                myWriter.write("\t%_" + register++ + " = mul i32 %_" + (register - 2) + ", " + identifier2 + "\n");
+            else if (isLiteral1 && isLiteral2)
+                myWriter.write("\t%_" + register++ + " = mul i32 " + identifier1 + ", " + identifier2 + "\n");
+            else {
+                if (wasOutside2)
+                    myWriter.write(
+                            "\t%_" + register++ + " = mul i32 %_" + (register - 4) + ", %_" + (register - 2) + "\n");
+                else
+                    myWriter.write(
+                            "\t%_" + register++ + " = mul i32 %_" + (register - 3) + ", %_" + (register - 2) + "\n");
+
+            }
+            return "times";
+        } else
+
+        {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
             n.f2.accept(this, argu);

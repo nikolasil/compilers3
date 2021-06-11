@@ -52,22 +52,37 @@ define i32 @main() {
 	ret i32 0
 }
 	%data = alloca i32
-	%c = alloca i1
+
 define i32 @Base.set(i8* %this, i32 %.x) {
-	%c = alloca i1
-	%_0 = load i1, i1* %c
-	%_1 = load i1, i1* %c
-	%_2 = getelementptr i8, i8* %this, i32 8
-	%_3 = bitcast i8* %_2 to i32*
-	store i32 1, i32* %_3
-	%_4 = getelementptr i8, i8* %this, i32 8
-	%_5 = bitcast i8* %_4 to i32*
-	store i32 2, i32* %_5
-}
-define i32 @Base.get(i8* %this) {
-}
-define i32 @Derived.set(i8* %this, i32 %.x) {
+	%x alloca i32
+	store i32 %.x, i32* %x
+
 	%_0 = getelementptr i8, i8* %this, i32 8
 	%_1 = bitcast i8* %_0 to i32*
-	store i32 int, i32* %_1
+	%_2 = load i32, i32* %x
+	store i32 %_2, i32* %_1
+	%_3 = getelementptr i8, i8* %this, i32 8
+	%_4 = bitcast i8* %_3 to i32*
+	ret i32 %_4
+}
+
+define i32 @Base.get(i8* %this) {
+
+	%_0 = getelementptr i8, i8* %this, i32 8
+	%_1 = bitcast i8* %_0 to i32*
+	ret i32 %_1
+}
+
+define i32 @Derived.set(i8* %this, i32 %.x) {
+	%x alloca i32
+	store i32 %.x, i32* %x
+
+	%_0 = load i32, i32* %x
+	%_1 = mul i32 %_0, 2
+	%_2 = getelementptr i8, i8* %this, i32 8
+	%_3 = bitcast i8* %_2 to i32*
+	store i8 times, i32* %_3
+	%_4 = getelementptr i8, i8* %this, i32 8
+	%_5 = bitcast i8* %_4 to i32*
+	ret i32 %_5
 }
