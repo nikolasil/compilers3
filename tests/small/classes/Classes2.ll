@@ -1,4 +1,12 @@
-@.And_vtable = global [0 x i8*] []
+@.Classes_vtable = global [0 x i8*] []
+@.Base_vtable = global [2 x i8*] [
+	i8* bitcast (i32 (i8*,i32)* @Base.set to i8*),
+	i8* bitcast (i32 (i8*)* @Base.get to i8*)
+]
+@.Derived_vtable = global [2 x i8*] [
+	i8* bitcast (i32 (i8*,i32)* @Derived.set to i8*),
+	i8* bitcast (i32 (i8*)* @Base.get to i8*)
+]
 
 declare i8* @calloc(i32, i32)
 declare i32 @printf(i8*, ...)
@@ -35,7 +43,23 @@ define void @throw_nsz() {
 }
 
 define i32 @main() {
-	%_0 = alloca i1
-	%_1 = alloca i1
-	%_2 = alloca i32
+	%b = alloca i8
+	%d = alloca i8
+	store i8 %_-1, i8* %b
+	store i8 %_-1, i8* %d
+	%_0 = load i8, i8* %d
+	store i8 %_0, i8* %b
+}
+	%data = alloca i32
+define i32 @Base.set(i8* %this, i32 %.x) {
+	%data = alloca i32
+	%_0 = load i32, i32* %x
+	store i32 %_0, i32* %data
+}
+define i32 @Base.get(i8* %this) {
+}
+define i32 @Derived.set(i8* %this, i32 %.x) {
+	%_0 = getelementptr i8, i8* %this, i32 8
+	%_1 = bitcast i8* %_0 to i32*
+	store i8 %_1, i32* %_0
 }

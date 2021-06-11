@@ -63,16 +63,19 @@ class TypeCheckError extends Exception {
 class VTable {
     String name;
     Map<String, Integer> methods;
+    Map<String, String> belongsTo;
     Map<String, Integer> variables;
 
     VTable(String n) {
         name = n;
         variables = new LinkedHashMap<String, Integer>();
         methods = new LinkedHashMap<String, Integer>();
+        belongsTo = new LinkedHashMap<String, String>();
     }
 
-    void addMethod(String mName, Integer offset) {
+    void addMethod(String mName, Integer offset, String belongs) {
         this.methods.put(mName, offset);
+        this.belongsTo.put(mName, belongs);
     }
 
     void addVariable(String vName, Integer offset) {
@@ -103,6 +106,7 @@ class VTable {
 class SymbolTable {
     Map<String, ST_Class> classes;
     int state; // 0 = fill table , 1 = type check
+    String location;
 
     SymbolTable() {
         classes = new LinkedHashMap<String, ST_Class>();
@@ -125,7 +129,7 @@ class SymbolTable {
         for (String name : this.classes.keySet()) {
             if (name.equals(main)) {
                 VTable mainV = new VTable(main);
-                mainV.addMethod("main", 0);
+                mainV.addMethod("main", 0, name);
                 offsets.put(name, mainV);
                 continue;
             }
@@ -135,6 +139,9 @@ class SymbolTable {
             int offset_var = 0;
             int offset_func = 0;
             ST_Class C = this.classes.get(name);
+
+            VTable prevTable = null;
+
             while (true) {
                 String Cname = C.getName();
                 if (visited.containsKey(Cname))
@@ -142,6 +149,7 @@ class SymbolTable {
                 System.out.println("-----------Class " + Cname + "-----------");
 
                 VTable table = new VTable(Cname);
+
                 offsets.put(Cname, table);
 
                 Map<String, String> atr = C.getAtributes();
@@ -160,26 +168,44 @@ class SymbolTable {
                     else
                         offset_var += 8;
                 }
+                if (C.getParent() != null) {
+                    for (String parentVar : prevTable.variables.keySet()) {
+                        if (!table.variables.containsKey(parentVar)) {
+                            table.addVariable(parentVar, prevTable.variables.get(parentVar));
+                        }
+                    }
+                }
                 Map<String, ST_Method> meth = C.getMethods();
                 System.out.println("---Methods---");
                 for (String me : meth.keySet()) {
-                    // System.out.println(this.lookupSameMethodInParents(this, Cname, me) + " " +
-                    // Cname + " " + me);
-                    if (this.lookupSameMethodInParents(this, Cname, me) == 2)
+                    if (this.lookupSameMethodInParents(this, Cname, me) == 2) {
+                        table.addMethod(me, prevTable.methods.get(me), Cname);
                         continue;
-
+                    }
                     System.out.println(Cname + "." + me + " : " + offset_func);
-                    table.addMethod(me, offset_func);
+                    table.addMethod(me, offset_func, Cname);
                     offset_func += 8;
+                }
+                if (C.getParent() != null) {
+                    for (String parentMeth : prevTable.methods.keySet()) {
+                        if (!table.methods.containsKey(parentMeth)) {
+                            table.addMethod(parentMeth, prevTable.methods.get(parentMeth),
+                                    prevTable.belongsTo.get(parentMeth));
+                        }
+                    }
                 }
                 visited.put(Cname, C);
                 C = C.getChild();
-                if (C == null)
+                prevTable = table;
+                if (C == null) {
+                    prevTable = null;
                     break;
+                }
             }
             System.out.println();
         }
         System.out.println("-- [END PRINTING OFFSETS] --");
+
     }
 
     int enter(String className, String classExtend) {
@@ -247,23 +273,29 @@ class SymbolTable {
             ST_Method M = C.getMethod(methName);
             if (M != null) {
                 r = M.getBodyVariable(varName);
-                if (r != "")
+                if (!r.equals("")) {
+                    location = "bodyVariable";
                     return r;
-
+                }
                 r = M.getArgument(varName);
-                if (r != "")
+                if (!r.equals("")) {
+                    location = "argument";
                     return r;
+                }
 
                 ST_Class temp = C;
                 while (temp != null) {
                     r = temp.getAtribute(varName);
-                    if (r != "")
+                    if (!r.equals("")) {
+                        location = "outside";
                         return r;
+                    }
 
                     temp = temp.getParent();
                 }
             }
         }
+        location = "dontexists";
         return "";
     }
 
@@ -568,11 +600,28 @@ class MyVisitor extends GJDepthFirst<String, String> {
     SymbolTable ST;
     Map<String, VTable> offsets;
     FileWriter myWriter;
+    Integer register;
 
     MyVisitor(SymbolTable S, Map<String, VTable> o, FileWriter writer) {
         ST = S;
         offsets = o;
         myWriter = writer;
+        register = 0;
+    }
+
+    String getBits(String k) {
+        if (k.equals("boolean"))
+            return "i1";
+        if (k.equals("true"))
+            return "i1";
+        if (k.equals("false"))
+            return "i1";
+        else if (k.equals("int"))
+            return "i32";
+        else if (k.equals("int[]"))
+            return "i32*";
+        else
+            return "i8";
     }
 
     public String visit(Goal n, String argu) throws Exception {
@@ -643,9 +692,31 @@ class MyVisitor extends GJDepthFirst<String, String> {
             for (String name : offsets.keySet()) {
                 if (name == first)
                     myWriter.write("@." + name + "_vtable = global [0 x i8*] []\n");
-                else
-                    myWriter.write(
-                            "@." + name + "_vtable = global [" + offsets.get(name).methods.size() + " x i8*] []\n");
+                else {
+                    myWriter.write("@." + name + "_vtable = global [" + offsets.get(name).methods.size() + " x i8*] [");
+                    if (offsets.get(name).methods.size() > 0) {
+                        int count = 0;
+                        for (String methName : offsets.get(name).methods.keySet()) {
+                            if (count > 0)
+                                myWriter.write(",\n\t");
+                            else
+                                myWriter.write("\n\t");
+
+                            ST_Method meth = ST.lookupMethod(name, methName);
+                            myWriter.write("i8* bitcast (");
+                            myWriter.write(getBits(meth.getType()));
+                            myWriter.write(" (i8*");
+                            for (String arg : meth.getArguments().keySet())
+                                myWriter.write("," + getBits(meth.getArguments().get(arg)));
+                            myWriter.write(")* @" + offsets.get(name).belongsTo.get(meth.getName()) + "."
+                                    + meth.getName() + " to i8*)");
+                            count++;
+                        }
+
+                        myWriter.write("\n]\n");
+                    } else
+                        myWriter.write("]\n");
+                }
             }
             myWriter.write("\ndeclare i8* @calloc(i32, i32)\n");
             myWriter.write("declare i32 @printf(i8*, ...)\n");
@@ -693,12 +764,16 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             n.f12.accept(this, classname); // ")"
             n.f13.accept(this, classname); // "{"
+            myWriter.write("define i32 @main() {\n");
+
             n.f14.accept(this, classname + "->main");
             // visit VarDeclaration with className->method in order to know where this
             // variable will the be
             n.f15.accept(this, classname + "->main"); // Statements
             n.f16.accept(this, classname + "->main"); // "}"
             n.f17.accept(this, classname + "->main"); // "}
+
+            myWriter.write("}\n");
         }
         return null;
     }
@@ -720,7 +795,12 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f4.accept(this, classname); // methods
             n.f5.accept(this, classname); // "}"
         } else {
-
+            n.f0.accept(this, null); // "class"
+            String classname = n.f1.accept(this, null);
+            n.f2.accept(this, classname); // "{"
+            n.f3.accept(this, classname); // variables
+            n.f4.accept(this, classname); // methods
+            n.f5.accept(this, classname); // "}"
         }
         return null;
     }
@@ -748,7 +828,14 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             // ST.print();
         } else {
-
+            n.f0.accept(this, null); // "class"
+            String classname = n.f1.accept(this, null);
+            n.f2.accept(this, classname); // "extends"
+            String parent = n.f3.accept(this, classname);
+            n.f4.accept(this, classname); // "{"
+            n.f5.accept(this, classname); // variables
+            n.f6.accept(this, classname); // methods
+            n.f7.accept(this, classname); // "}"
         }
         return null;
     }
@@ -793,8 +880,9 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
             n.f2.accept(this, argu); // ";"
         } else {
-
-            // System.out.println("type:" + type + " exists");
+            String type = n.f0.accept(this, argu); // argument name
+            String name = n.f1.accept(this, argu); // argument name
+            myWriter.write("\t" + "%" + name + " = alloca " + getBits(type) + "\n");
         }
         return null;
     }
@@ -848,7 +936,43 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f11.accept(this, argu + "->" + myName); // ";"
             n.f12.accept(this, argu + "->" + myName); // "}"
         } else {
+            register = 0;
+            n.f0.accept(this, argu); // "public"
+            String myType = n.f1.accept(this, argu); // method type
+            String myName = n.f2.accept(this, argu); // method name
+            myWriter.write("define " + getBits(myType) + " @" + argu + "." + myName + "(i8* %this");
+            n.f3.accept(this, argu); // "("
 
+            String argumentList = n.f4.present() ? n.f4.accept(this, argu) : "";
+            String[] arguments = argumentList.split(",");
+            for (String arg : arguments) {
+                String[] a = arg.split("\\s");
+                String aType = "";
+                String aName = "";
+                int count = 1;
+                for (int i = 0; i < a.length; i++) {
+                    if (count == 1)
+                        aType = a[i];
+                    else
+                        aName = a[i];
+
+                    if (a[i].length() != 0)
+                        count = 2;
+                }
+
+                if (!aName.equals("") && !aType.equals(""))
+                    myWriter.write(", " + getBits(aType) + " %." + aName);
+            }
+            myWriter.write(") {\n");
+            n.f5.accept(this, argu); // ")"
+            n.f6.accept(this, argu); // "{"
+            n.f7.accept(this, argu + "->" + myName); // variables
+            n.f8.accept(this, argu + "->" + myName); // statements
+            n.f9.accept(this, argu + "->" + myName); // "return"
+            n.f10.accept(this, argu + "->" + myName); // expresion
+            n.f11.accept(this, argu + "->" + myName); // ";"
+            n.f12.accept(this, argu + "->" + myName); // "}"
+            myWriter.write("}\n");
         }
         return null;
     }
@@ -927,8 +1051,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(ArrayLength n, String argu) throws Exception {
         if (ST.getState() == 1) {
-
-            return "return int";
+            return "int";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -961,7 +1084,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
         if (ST.getState() == 1) {
             n.f0.accept(this, argu);
             String a = n.f1.accept(this, argu);
-            // System.out.println("(" + a + ")");
             n.f2.accept(this, argu);
             return a;
         } else {
@@ -982,7 +1104,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(TrueLiteral n, String argu) throws Exception {
         n.f0.accept(this, argu);
-        return "boolean";
+        return "true";
     }
 
     /**
@@ -990,7 +1112,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(FalseLiteral n, String argu) throws Exception {
         n.f0.accept(this, argu);
-        return "boolean";
+        return "false";
     }
 
     /**
@@ -999,7 +1121,6 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(Identifier n, String argu) throws Exception {
         String a = n.f0.toString();
         return a;
-        // return n.f0.accept(this, argu);
     }
 
     /**
@@ -1008,7 +1129,38 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(AssignmentStatement n, String argu) throws Exception {
         // System.out.println("AssignmentStatement");
         if (ST.getState() == 1) {
+            String identifier = n.f0.accept(this, argu);
+            String[] scope = argu.split("->");
 
+            String idType = ST.lookup(scope[0], scope[1], identifier);
+            boolean leftPart = true;
+            if (!(ST.location.equals("bodyVariable") || ST.location.equals("argument"))) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(scope[0]).variables.get(identifier) + 8) + "\n");
+                myWriter.write(
+                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(idType) + "*\n");
+            } else {
+                leftPart = false;
+            }
+            n.f1.accept(this, argu);
+            String expr = n.f2.accept(this, argu);
+            String exprType = ST.lookup(scope[0], scope[1], expr);
+            if (ST.location.equals("dontexists")) {
+
+            } else {
+                myWriter.write("\t%_" + register++ + " = load " + getBits(exprType) + ", " + getBits(exprType) + "* %"
+                        + expr + "\n");
+            }
+            if (leftPart)
+                myWriter.write("\tstore " + getBits(exprType) + " %_" + (register - 1) + ", " + getBits(idType) + "* %_"
+                        + (register - 2) + "\n");
+            else {
+                myWriter.write("\tstore " + getBits(exprType) + " %_" + (register - 1) + ", " + getBits(idType) + "* %"
+                        + identifier + "\n");
+            }
+
+            n.f3.accept(this, argu);
+            // myWriter.write("store " + getBits(r1));
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1046,7 +1198,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
         // System.out.println("ArrayLookup");
         if (ST.getState() == 1) {
 
-            return "return int";
+            return "int";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1195,8 +1347,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(PlusExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
-
-            return "return int";
+            n.f0.accept(this, argu);
+            n.f1.accept(this, argu);
+            n.f2.accept(this, argu);
+            return "int";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1211,7 +1365,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(MinusExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
 
-            return "return int";
+            return "int";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1226,7 +1380,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(TimesExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
 
-            return "return int";
+            return "int";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
