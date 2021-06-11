@@ -18,7 +18,6 @@ class Base {
 	int data;
 
 	public int set(int x) {
-		int data;
 		data = x;
 
 		return data;
@@ -30,7 +29,6 @@ class Base {
 }
 
 class Derived extends Base {
-
 	public int set(int x) {
 		data = x * 2;
 
