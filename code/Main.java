@@ -64,6 +64,7 @@ class VTable {
     String name;
     Map<String, Integer> methods;
     Map<String, String> belongsTo;
+
     Map<String, Integer> variables;
 
     VTable(String n) {
