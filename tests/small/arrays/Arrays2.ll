@@ -1,4 +1,4 @@
-@.And_vtable = global [0 x i8*] []
+@.Arrays_vtable = global [0 x i8*] []
 
 declare i8* @calloc(i32, i32)
 declare i32 @printf(i8*, ...)
@@ -35,33 +35,40 @@ define void @throw_nsz() {
 }
 
 define i32 @main() {
-	%b = alloca i1
-	%c = alloca i1
-	%x = alloca i32
-	store i1 0, i1* %b
-	store i1 1, i1* %c
-	%_0 = load i1, i1* %b
-	br i1 %_0, label %exp_res_1, label %exp_res_0
+	%x = alloca i32*
 
-	exp_res_0:
-	br label %exp_res__3
+	%_0 = load i32*, i32** %x
+	%_1 = load i32, i32* %_0
+	%_2 = icmp sge i32 0, 0
+	%_3 = icmp slt i32 0, %_1
+	%_4 = and i1 %_2, %_3
+	br i1 %_4, label %oob_ok_0, label %oob_err_0
 
-	exp_res_1:
-	%_1 = load i1, i1* %c
-	br label %exp_res_2
+	oob_err_0:
+	call void @throw_oob()
+	br label %oob_ok_0
 
-	exp_res_2:
-	br label %exp_res_3
+	oob_ok_0:
+	%_5 = add i32 1, 0
+	%_6 = getelementptr i32 , i32* %_0, i32 %_5
+	store i32 1, i32* %_6
 
-	exp_res_3:
-	%_2 = phi i1 [ 0, %exp_res_0 ], [ %_1, %exp_res_2 ]
-	br i1 %_2, label %if_then_0, label %if_else_0
-	if_else_0:
 
-	br label %if_end_0
-	if_then_0:
+	%_7 = load i32*, i32** %x
+	%_8 = load i32, i32* %_7
+	%_9 = icmp sge i32 1, 0
+	%_10 = icmp slt i32 1, %_8
+	%_11 = and i1 %_9, %_10
+	br i1 %_11, label %oob_ok_1, label %oob_err_1
 
-	br label %if_end_0
-	if_end_0:
+	oob_err_1:
+	call void @throw_oob()
+	br label %oob_ok_1
+
+	oob_ok_1:
+	%_12 = add i32 1, 1
+	%_13 = getelementptr i32 , i32* %_7, i32 %_12
+	store i32 2, i32* %_13
+
 	ret i32 0
 }
