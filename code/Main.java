@@ -206,7 +206,6 @@ class SymbolTable {
             System.out.println();
         }
         System.out.println("-- [END PRINTING OFFSETS] --");
-
     }
 
     int enter(String className, String classExtend) {
@@ -608,6 +607,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
     Integer if_end_;
     Integer oob_ok_;
     Integer oob_err_;
+    Integer nsz_ok_;
+    Integer nsz_err_;
 
     MyVisitor(SymbolTable S, Map<String, VTable> o, FileWriter writer) {
         ST = S;
@@ -620,6 +621,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
         if_end_ = 0;
         oob_ok_ = 0;
         oob_err_ = 0;
+        nsz_ok_ = 0;
+        nsz_err_ = 0;
     }
 
     String getBits(String k) {
@@ -970,6 +973,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
             if_end_ = 0;
             oob_ok_ = 0;
             oob_err_ = 0;
+            nsz_ok_ = 0;
+            nsz_err_ = 0;
             n.f0.accept(this, argu); // "public"
             String myType = n.f1.accept(this, argu); // method type
             String myName = n.f2.accept(this, argu); // method name
@@ -1037,7 +1042,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
                 myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + ", " + getBits(rType) + "* %_"
                         + (register - 2) + "\n");
                 myWriter.write("\tret " + getBits(myType) + " %_" + (register - 1) + "\n");
-            } else if (r.equals("times") || r.equals("plus") || r.equals("minus") || r.equals("&&")) {
+            } else if (r.equals("times") || r.equals("plus") || r.equals("minus") || r.equals("&&") || r.equals("<")) {
                 myWriter.write("\tret " + getBits(myType) + " %_" + (register - 1) + "\n");
             } else {
                 myWriter.write("\tret " + getBits(myType) + " " + r + "\n");
@@ -1200,64 +1205,97 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(AssignmentStatement n, String argu) throws Exception {
         // System.out.println("AssignmentStatement");
         if (ST.getState() == 1) {
-
-            String identifier = n.f0.accept(this, argu);
             String[] scope = argu.split("->");
-
-            String idType = ST.lookup(scope[0], scope[1], identifier);
-            boolean leftPart = true;
-            if (!(ST.location.equals("bodyVariable") || ST.location.equals("argument"))) {
-                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
-                        + (offsets.get(scope[0]).variables.get(identifier) + 8) + "\n");
-                myWriter.write(
-                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(idType) + "*\n");
-            } else {
-                leftPart = false;
-            }
+            String left = n.f0.accept(this, argu);
+            String leftType = ST.lookup(scope[0], scope[1], left);
+            String leftLocation = ST.location;
             n.f1.accept(this, argu);
-            String expr = n.f2.accept(this, argu);
-            String exprType = ST.lookup(scope[0], scope[1], expr);
-            boolean rightPart = true;
-            if (ST.location.equals("dontexists")) {
-                rightPart = false;
-            } else {
-                myWriter.write("\t%_" + register++ + " = load " + getBits(exprType) + ", " + getBits(exprType) + "* %"
-                        + expr + "\n");
-            }
-            if (leftPart) {
-                if (rightPart)
-                    myWriter.write("\tstore " + getBits(exprType) + " %_" + (register - 1) + ", " + getBits(idType)
-                            + "* %_" + (register - 2) + "\n");
-                else {
-                    if (expr.equals("true"))
-                        myWriter.write("\tstore " + getBits(expr) + " " + 1 + ", " + getBits(idType) + "* %_"
-                                + (register - 1) + "\n");
-                    else if (expr.equals("false"))
-                        myWriter.write("\tstore " + getBits(expr) + " " + 0 + ", " + getBits(idType) + "* %_"
-                                + (register - 1) + "\n");
-                    else if (expr.equals("times") || expr.equals("plus") || expr.equals("minus"))
-                        myWriter.write("\tstore " + getBits(expr) + " %_" + (register - 1) + ", " + getBits(idType)
-                                + "* %_" + (register - 3) + "\n");
+            String right = n.f2.accept(this, argu);
+            String rightType = ST.lookup(scope[0], scope[1], right);
+            String rightLocation = ST.location;
+            System.out.println(leftLocation + " -> " + rightLocation);
+            if (leftLocation.equals("bodyVariable") || leftLocation.equals("argument")) {
+                if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rightType) + ", " + getBits(rightType)
+                            + "* %" + right + "\n");
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 1) + ", " + getBits(leftType)
+                            + "* %" + left + "\n");
+                } else if (rightLocation.equals("outside")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(right) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(rightType) + "*\n");
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 1) + ", " + getBits(leftType)
+                            + "* %" + left + "\n");
+                } else if (right.equals("times") || right.equals("plus") || right.equals("minus")) {
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 1) + ", " + getBits(leftType)
+                            + "* %" + left + "\n");
+                } else if (right.equals("true")) {
+                    myWriter.write("\tstore i1 1, i1* %" + left + "\n");
+                } else if (right.equals("false")) {
+                    myWriter.write("\tstore i1 0, i1* %" + left + "\n");
+                } else if (isInteger(right)) {
+                    myWriter.write("\tstore i32 " + right + ", " + getBits(leftType) + "* %" + left + "\n");
                 }
-            } else {
-                if (rightPart)
-                    myWriter.write("\tstore " + getBits(exprType) + " %_" + (register - 1) + ", " + getBits(idType)
-                            + "* %" + identifier + "\n");
-                else {
-                    if (expr.equals("true"))
-                        myWriter.write("\tstore " + getBits(expr) + " " + 1 + ", " + getBits(idType) + "* %"
-                                + identifier + "\n");
-                    else if (expr.equals("false"))
-                        myWriter.write("\tstore " + getBits(expr) + " " + 0 + ", " + getBits(idType) + "* %"
-                                + identifier + "\n");
-                    else if (expr.equals("times") || expr.equals("plus") || expr.equals("minus"))
-                        myWriter.write("\tstore " + getBits(expr) + " %_" + (register - 1) + ", " + getBits(idType)
-                                + "* %" + identifier + "\n");
+            } else if (leftLocation.equals("outside")) {
+                if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rightType) + ", " + getBits(rightType)
+                            + "* %" + right + "\n");
+
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 3) + ", " + getBits(leftType)
+                            + "* %_" + (register - 1) + "\n");
+                } else if (rightLocation.equals("outside")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(right) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(rightType) + "*\n");
+
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 3) + ", " + getBits(leftType)
+                            + "* %_" + (register - 1) + "\n");
+                } else if (right.equals("times") || right.equals("plus") || right.equals("minus")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+
+                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 3) + ", " + getBits(leftType)
+                            + "* %_" + (register - 1) + "\n");
+                } else if (right.equals("true")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+
+                    myWriter.write("\tstore i1 1, i1* %_" + (register - 1) + "\n");
+                } else if (right.equals("false")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+                    myWriter.write("\tstore i1 0, i1* %_" + (register - 1) + "\n");
+                } else if (isInteger(right)) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+                    myWriter.write("\tstore i32 " + right + ", " + getBits(leftType) + "* %_" + (register - 1) + "\n");
                 }
             }
 
             n.f3.accept(this, argu);
-        } else {
+        } else
+
+        {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
             n.f2.accept(this, argu);
@@ -1275,61 +1313,65 @@ class MyVisitor extends GJDepthFirst<String, String> {
         if (ST.getState() == 1) {
             String[] scope = argu.split("->");
 
-            String identifier = n.f0.accept(this, argu);
-            String idType = ST.lookup(scope[0], scope[1], identifier);
-            Integer leftPart = 0;
-            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
-                leftPart = 0;
-                myWriter.write("\n\t%_" + register++ + " = load i32*, i32** %" + identifier + "\n");
-                myWriter.write("\t%_" + register++ + " = load i32, i32* %_" + (register - 2) + "\n");
-            } else {
-                leftPart = 1;
-            }
+            String left = n.f0.accept(this, argu);
+            String leftType = ST.lookup(scope[0], scope[1], left);
+            String leftLocation = ST.location;
             n.f1.accept(this, argu);
-            String insideBrac = n.f2.accept(this, argu);
-            String insideBracType = ST.lookup(scope[0], scope[1], insideBrac);
-            Integer insideBracPart = 0;
-            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
-                insideBracPart = 0;
-            } else if (ST.location.equals("outside")) {
-                insideBracPart = 1;
-            } else if (insideBrac.equals("times") || insideBrac.equals("plus") || insideBrac.equals("minus")) {
-                insideBracPart = 2;
-            } else {
-                insideBracPart = 3;
-                myWriter.write("\t%_" + register++ + " = icmp sge i32 " + insideBrac + ", 0" + "\n");
-                myWriter.write("\t%_" + register++ + " = icmp slt i32 " + insideBrac + ", %_" + (register - 3) + "\n");
-                myWriter.write("\t%_" + register++ + " = and i1 %_" + (register - 3) + ", %_" + (register - 2) + "\n");
-                myWriter.write("\tbr i1 %_" + (register - 1) + ", label %oob_ok_" + oob_ok_++ + ", label %oob_err_"
-                        + oob_err_++ + "\n");
-                myWriter.write("\n\toob_err_" + (oob_err_ - 1) + ":\n");
-                myWriter.write("\tcall void @throw_oob()\n");
-                myWriter.write("\tbr label %oob_ok_" + (oob_ok_ - 1) + "\n");
-                myWriter.write("\n\toob_ok_" + (oob_ok_ - 1) + ":\n");
-                myWriter.write("\t%_" + register++ + " = add i32 1, " + insideBrac + "\n");
-                myWriter.write("\t%_" + register++ + " = getelementptr i32 , i32* %_" + (register - 7) + ", i32 %_"
-                        + (register - 2) + "\n");
-            }
-
+            String position = n.f2.accept(this, argu);
+            String positionType = ST.lookup(scope[0], scope[1], position);
+            String positionLocation = ST.location;
             n.f3.accept(this, argu);
             n.f4.accept(this, argu);
+            String right = n.f5.accept(this, argu);
+            String rightType = ST.lookup(scope[0], scope[1], right);
+            String rightLocation = ST.location;
 
-            String expr = n.f5.accept(this, argu);
-            String exprType = ST.lookup(scope[0], scope[1], expr);
-            Integer rightPart = 0;
-            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
-                rightPart = 0;
-            } else if (ST.location.equals("outside")) {
-                rightPart = 1;
-            } else if (insideBrac.equals("times") || insideBrac.equals("plus") || insideBrac.equals("minus")) {
-                rightPart = 2;
-            } else {
-                rightPart = 3;
-                myWriter.write("\tstore i32 " + expr + ", i32* %_" + (register - 1) + "\n\n");
+            if (leftLocation.equals("bodyVariable") || leftLocation.equals("argument")) {
+                if (positionLocation.equals("bodyVariable") || positionLocation.equals("argument")) {
+                } else if (positionLocation.equals("outside")) {
+                } else if (isInteger(position)) {
+                    myWriter.write("\n\t%_" + register++ + " = load i32*, i32** %" + left + "\n");
+                    myWriter.write("\t%_" + register++ + " = load i32, i32* %_" + (register - 2) + "\n");
+
+                    myWriter.write("\t%_" + register++ + " = icmp sge i32 " + position + ", 0" + "\n");
+                    myWriter.write(
+                            "\t%_" + register++ + " = icmp slt i32 " + position + ", %_" + (register - 3) + "\n");
+                    myWriter.write(
+                            "\t%_" + register++ + " = and i1 %_" + (register - 3) + ", %_" + (register - 2) + "\n");
+                    myWriter.write("\tbr i1 %_" + (register - 1) + ", label %oob_ok_" + oob_ok_++ + ", label %oob_err_"
+                            + oob_err_++ + "\n");
+                    myWriter.write("\n\toob_err_" + (oob_err_ - 1) + ":\n");
+                    myWriter.write("\tcall void @throw_oob()\n");
+                    myWriter.write("\tbr label %oob_ok_" + (oob_ok_ - 1) + "\n");
+                    myWriter.write("\n\toob_ok_" + (oob_ok_ - 1) + ":\n");
+                    myWriter.write("\t%_" + register++ + " = add i32 1, " + position + "\n");
+                    myWriter.write("\t%_" + register++ + " = getelementptr i32 , i32* %_" + (register - 7) + ", i32 %_"
+                            + (register - 2) + "\n");
+                }
+            } else if (leftLocation.equals("outside")) {
+
             }
+
             n.f6.accept(this, argu);
+            if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load i32, i32* %" + right + "\n");
+                myWriter.write("\tstore i32 %_" + (register - 1) + ", i32* %_" + (register - 2) + "\n\n");
+            } else if (rightLocation.equals("outside")) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(scope[0]).variables.get(right) + 8) + "\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(rightType)
+                        + "*\n");
+                myWriter.write("\tstore i32 %_" + (register - 1) + ", i32* %_" + (register - 3) + "\n\n");
+            } else if (right.equals("times") || right.equals("plus") || right.equals("minus")) {
+                myWriter.write("\tstore i32 %_" + (register - 8) + ", i32* %_" + (register - 1) + "\n\n");
+            } else if (isInteger(right)) {
+                myWriter.write("\tstore i32 " + right + ", i32* %_" + (register - 1) + "\n\n");
+            }
+
             return null;
-        } else {
+        } else
+
+        {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
             n.f2.accept(this, argu);
@@ -1420,10 +1462,41 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(CompareExpression n, String argu) throws Exception {
         // System.out.println("compare");
         if (ST.getState() == 1) {
-            n.f0.accept(this, argu);
+            String[] scope = argu.split("->");
+            String left = n.f0.accept(this, argu);
+            String leftType = ST.lookup(scope[0], scope[1], left);
+            String leftLocation = ST.location;
             n.f1.accept(this, argu);
-            n.f2.accept(this, argu);
-            return "return boolean";
+            String right = n.f2.accept(this, argu);
+            String rightType = ST.lookup(scope[0], scope[1], right);
+            String rightLocation = ST.location;
+
+            if (leftLocation.equals("bodyVariable") || leftLocation.equals("argument")) {
+                if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+
+                } else if (rightLocation.equals("outside")) {
+
+                } else if (isInteger(right)) {
+
+                }
+            } else if (leftLocation.equals("outside")) {
+                if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+
+                } else if (rightLocation.equals("outside")) {
+
+                } else if (isInteger(right)) {
+
+                }
+            } else if (isInteger(left)) {
+                if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
+
+                } else if (rightLocation.equals("outside")) {
+
+                } else if (isInteger(right)) {
+
+                }
+            }
+            return "<";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1770,8 +1843,74 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(ArrayAllocationExpression n, String argu) throws Exception {
         if (ST.getState() == 1) {
+            n.f0.accept(this, argu);
+            n.f1.accept(this, argu);
+            n.f2.accept(this, argu);
+            String[] scope = argu.split("->");
+            String length = n.f3.accept(this, argu);
+            String lengthType = ST.lookup(scope[0], scope[1], length);
+            if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load i32, i32* %_" + length + "\n");
 
-            return "return int[]";
+                myWriter.write("\t%_" + register++ + " = add i32 1, %_" + (register - 2) + "\n");
+                myWriter.write("\t%_" + register++ + " = icmp sge i32 %_" + (register - 2) + ", 1\n");
+                myWriter.write("\tbr i1 %_" + (register - 1) + ", label %nsz_ok_" + nsz_ok_++ + ", label %nsz_err_"
+                        + nsz_err_++ + "\n");
+                myWriter.write("\n\tnsz_err_" + (nsz_err_ - 1) + ":\n");
+                myWriter.write("\tcall void @throw_nsz()\n");
+                myWriter.write("\tbr label %nsz_ok_" + (nsz_ok_ - 1) + "\n");
+
+                myWriter.write("\n\tnsz_ok_" + (nsz_ok_ - 1) + ":\n");
+                myWriter.write("\t%_" + register++ + " = call i8* @calloc(i32 %_" + (register - 3) + ", i32 4)\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i32*\n");
+                myWriter.write("\tstore i32 %_" + (register - 5) + ", i32* %_" + (register - 1) + "\n");
+
+            } else if (ST.location.equals("outside")) {
+                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                        + (offsets.get(scope[0]).variables.get(length) + 8) + "\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i32*" + "\n");
+
+                myWriter.write("\t%_" + register++ + " = add i32 1, %_" + (register - 2) + "\n");
+                myWriter.write("\t%_" + register++ + " = icmp sge i32 %_" + (register - 2) + ", 1\n");
+                myWriter.write("\tbr i1 %_" + (register - 1) + ", label %nsz_ok_" + nsz_ok_++ + ", label %nsz_err_"
+                        + nsz_err_++ + "\n");
+                myWriter.write("\n\tnsz_err_" + (nsz_err_ - 1) + ":\n");
+                myWriter.write("\tcall void @throw_nsz()\n");
+                myWriter.write("\tbr label %nsz_ok_" + (nsz_ok_ - 1) + "\n");
+
+                myWriter.write("\n\tnsz_ok_" + (nsz_ok_ - 1) + ":\n");
+                myWriter.write("\t%_" + register++ + " = call i8* @calloc(i32 %_" + (register - 3) + ", i32 4)\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i32*\n");
+                myWriter.write("\tstore i32 %_" + (register - 5) + ", i32* %_" + (register - 1) + "\n");
+            } else if (length.equals("times") || length.equals("plus") || length.equals("minus")) {
+                myWriter.write("\t%_" + register++ + " = add i32 1, %_" + (register - 2) + "\n");
+                myWriter.write("\t%_" + register++ + " = icmp sge i32 %_" + (register - 2) + ", 1\n");
+                myWriter.write("\tbr i1 %_" + (register - 1) + ", label %nsz_ok_" + nsz_ok_++ + ", label %nsz_err_"
+                        + nsz_err_++ + "\n");
+                myWriter.write("\n\tnsz_err_" + (nsz_err_ - 1) + ":\n");
+                myWriter.write("\tcall void @throw_nsz()\n");
+                myWriter.write("\tbr label %nsz_ok_" + (nsz_ok_ - 1) + "\n");
+
+                myWriter.write("\n\tnsz_ok_" + (nsz_ok_ - 1) + ":\n");
+                myWriter.write("\t%_" + register++ + " = call i8* @calloc(i32 %_" + (register - 3) + ", i32 4)\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i32*\n");
+                myWriter.write("\tstore i32 %_" + (register - 5) + ", i32* %_" + (register - 1) + "\n");
+            } else {
+                myWriter.write("\t%_" + register++ + " = add i32 1, " + length + "\n");
+                myWriter.write("\t%_" + register++ + " = icmp sge i32 %_" + (register - 2) + ", 1\n");
+                myWriter.write("\tbr i1 %_" + (register - 1) + ", label %nsz_ok_" + nsz_ok_++ + ", label %nsz_err_"
+                        + nsz_err_++ + "\n");
+                myWriter.write("\n\tnsz_err_" + (nsz_err_ - 1) + ":\n");
+                myWriter.write("\tcall void @throw_nsz()\n");
+                myWriter.write("\tbr label %nsz_ok_" + (nsz_ok_ - 1) + "\n");
+
+                myWriter.write("\n\tnsz_ok_" + (nsz_ok_ - 1) + ":\n");
+                myWriter.write("\t%_" + register++ + " = call i8* @calloc(i32 %_" + (register - 3) + ", i32 4)\n");
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i32*\n");
+                myWriter.write("\tstore i32 " + length + ", i32* %_" + (register - 1) + "\n");
+            }
+            n.f4.accept(this, argu);
+            return "arrayallocation";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);

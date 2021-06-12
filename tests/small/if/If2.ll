@@ -1,4 +1,4 @@
-@.And_vtable = global [0 x i8*] []
+@.Simple_vtable = global [0 x i8*] []
 
 declare i8* @calloc(i32, i32)
 declare i32 @printf(i8*, ...)
@@ -35,33 +35,13 @@ define void @throw_nsz() {
 }
 
 define i32 @main() {
-	%b = alloca i1
-	%c = alloca i1
 	%x = alloca i32
-	store i1 0, i1* %b
-	store i1 1, i1* %c
-	%_0 = load i1, i1* %b
-	br i1 %_0, label %exp_res_1, label %exp_res_0
-
-	exp_res_0:
-	br label %exp_res__3
-
-	exp_res_1:
-	%_1 = load i1, i1* %c
-	br label %exp_res_2
-
-	exp_res_2:
-	br label %exp_res_3
-
-	exp_res_3:
-	%_2 = phi i1 [ 0, %exp_res_0 ], [ %_1, %exp_res_2 ]
-	br i1 %_2, label %if_then_0, label %if_else_0
+	store i32 10, i32* %x
+	br i1 %_-1, label %if_then_0, label %if_else_0
 	if_else_0:
-	store i32 1, i32* %x
 
 	br label %if_end_0
 	if_then_0:
-	store i32 0, i32* %x
 
 	br label %if_end_0
 	if_end_0:
