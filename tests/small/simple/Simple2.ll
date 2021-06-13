@@ -1,7 +1,4 @@
 @.Simple_vtable = global [0 x i8*] []
-@.test_vtable = global [1 x i8*] [
-	i8* bitcast (i32 (i8*)* @test.func to i8*)
-]
 
 declare i8* @calloc(i32, i32)
 declare i32 @printf(i8*, ...)
@@ -39,39 +36,8 @@ define void @throw_nsz() {
 
 define i32 @main() {
 	%x = alloca i32
-	%y = alloca i32
 	store i32 10, i32* %x
 	%_0 = load i32, i32* %x
-	%_1 = load i32, i32* %y
-	%_2 = icmp slt i32 %_0, %_1
-	br i1 %_2, label %if_then_0, label %if_else_0
-	if_else_0:
-	call void (i32) @print_int(i32 1)
-
-	br label %if_end_0
-	if_then_0:
-	call void (i32) @print_int(i32 0)
-
-	br label %if_end_0
-	if_end_0:
-	ret i32 0
-}
-
-define i32 @test.func(i8* %this) {
-
-	%y = alloca i32
-	%_0 = add i32 3, 3
-	%_1 = load i32, i32* %y
-	%_2 = icmp slt i32 %_1, %_0
-	br i1 %_2, label %if_then_0, label %if_else_0
-	if_else_0:
-	call void (i32) @print_int(i32 1)
-
-	br label %if_end_0
-	if_then_0:
-	call void (i32) @print_int(i32 0)
-
-	br label %if_end_0
-	if_end_0:
+	call void (i32) @print_int(i32 %_0)
 	ret i32 0
 }

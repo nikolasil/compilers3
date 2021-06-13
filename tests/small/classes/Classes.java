@@ -32,6 +32,6 @@ class Derived extends Base {
 	public int set(int x) {
 		data = x * 2;
 
-		return x + 2;
+		return data;
 	}
 }
