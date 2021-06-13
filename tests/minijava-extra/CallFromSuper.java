@@ -1,6 +1,6 @@
 class CallFromSuper {
 
-    public static void main(String[] args) {
+    public static void main(String[] args){
         B b;
         int rv;
         b = new B();
@@ -10,14 +10,17 @@ class CallFromSuper {
 
 }
 
+
 class A {
 
-    public int foo() {
+    public int foo(){
         return 1;
     }
 
 }
 
+
 class B extends A {
+
 
 }

@@ -1,13 +1,13 @@
-class test73 {
-    public static void main(String[] a) {
+class test73{
+    public static void main(String[] a){
         System.out.println(new Test().start());
     }
 }
 
 class Test extends test73 {
 
-    public int start() {
-
+    public int start(){
+	
         return 0;
     }
 }

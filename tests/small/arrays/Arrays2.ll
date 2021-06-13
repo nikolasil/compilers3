@@ -48,6 +48,7 @@ define i32 @main() {
 	%_2 = call i8* @calloc(i32 %_0, i32 4)
 	%_3 = bitcast i8* %_2 to i32*
 	store i32 2, i32* %_3
+	store i32* %_3, i32** %x
 
 	%_4 = load i32*, i32** %x
 	%_5 = load i32, i32* %_4
@@ -82,5 +83,39 @@ define i32 @main() {
 	%_17 = getelementptr i32 , i32* %_11, i32 %_16
 	store i32 2, i32* %_17
 
+
+	%_18 = load i32*, i32** %x
+	%_19 = load i32, i32* %_18
+	%_20 = icmp sge i32 0, 0
+	%_21 = icmp slt i32 0, %_19
+	%_22 = and i1 %_20, %_21
+	br i1 %_22, label %oob_ok_2, label %oob_err_2
+
+	oob_err_2:
+	call void @throw_oob()
+	br label %oob_ok_2
+
+	oob_ok_2:
+	%_23 = add i32 1, 0
+	%_24 = getelementptr i32 , i32* %_18, i32 %_23
+	%_25 = load i32 , i32* %_24
+
+	%_26 = load i32*, i32** %x
+	%_27 = load i32, i32* %_26
+	%_28 = icmp sge i32 1, 0
+	%_29 = icmp slt i32 1, %_27
+	%_30 = and i1 %_28, %_29
+	br i1 %_30, label %oob_ok_3, label %oob_err_3
+
+	oob_err_3:
+	call void @throw_oob()
+	br label %oob_ok_3
+
+	oob_ok_3:
+	%_31 = add i32 1, 1
+	%_32 = getelementptr i32 , i32* %_26, i32 %_31
+	%_33 = load i32 , i32* %_32
+	%_34 = add i32 %_25, %_33
+	call void (i32) @print_int(i32 %_34)
 	ret i32 0
 }

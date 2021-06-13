@@ -2,8 +2,8 @@ class Classes {
 	public static void main(String[] a) {
 		Base b;
 		Derived d;
-		b = new Base();
-		d = new Derived();
+  		b = new Base();
+ 		d = new Derived();
 		b = d;
 		System.out.println(b.set(1));
 		System.out.println(b.set(3));
@@ -12,12 +12,10 @@ class Classes {
 
 class Base {
 	int data;
-
 	public int set(int x) {
 		data = x;
 		return data;
 	}
-
 	public int get() {
 		return data;
 	}

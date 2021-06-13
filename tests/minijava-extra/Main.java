@@ -1,24 +1,22 @@
 
 class Main {
 
-    public static void main(String[] a) {
+    public static void main(String[] a){
         ArrayTest ab;
-        ab = new ArrayTest();
+        ab=new ArrayTest ();
         System.out.println(ab.test(3));
     }
 
 }
-
 class ArrayTest {
-    int weee;
+	int weee;
     int wre;
     int aaa;
-
-    public int test(int num) {
+    public int test(int num){
         int i;
         int[] intArray;
         intArray = new int[num];
-        aaa = 0;
+        aaa=0;
         System.out.println(aaa);
         System.out.println(intArray.length);
         i = 0;
@@ -38,16 +36,15 @@ class ArrayTest {
         return intArray.length;
     }
 }
-
 class B extends ArrayTest {
     int aaa;
     int we;
 
-    public int test(int num) {
+    public int test(int num){
         int i;
         int[] intArray;
         intArray = new int[num];
-        aaa = 12;
+        aaa=12;
         System.out.println(aaa);
         System.out.println(intArray.length);
         i = 0;

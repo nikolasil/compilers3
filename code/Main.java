@@ -101,6 +101,14 @@ class VTable {
                 System.out.println("\t" + this.methods.get(name) + " " + name);
             }
         }
+        System.out.println("\n\t -- [BelongsTo] --");
+        if (this.belongsTo.size() == 0)
+            System.out.println("\tnone");
+        else {
+            for (String name : this.belongsTo.keySet()) {
+                System.out.println("\t" + name + " " + this.belongsTo.get(name));
+            }
+        }
     }
 }
 
@@ -155,6 +163,13 @@ class SymbolTable {
 
                 Map<String, String> atr = C.getAtributes();
                 System.out.println("---Variables---");
+                if (C.getParent() != null) {
+                    for (String parentVar : prevTable.variables.keySet()) {
+                        // if (!table.variables.containsKey(parentVar)) {
+                        table.addVariable(parentVar, prevTable.variables.get(parentVar));
+                        // }
+                    }
+                }
                 for (String at : atr.keySet()) {
                     if (at.equals("this"))
                         continue;
@@ -168,13 +183,6 @@ class SymbolTable {
                         offset_var++;
                     else
                         offset_var += 8;
-                }
-                if (C.getParent() != null) {
-                    for (String parentVar : prevTable.variables.keySet()) {
-                        if (!table.variables.containsKey(parentVar)) {
-                            table.addVariable(parentVar, prevTable.variables.get(parentVar));
-                        }
-                    }
                 }
                 Map<String, ST_Method> meth = C.getMethods();
                 System.out.println("---Methods---");
@@ -600,11 +608,14 @@ class MyVisitor extends GJDepthFirst<String, String> {
     SymbolTable ST;
     Map<String, VTable> offsets;
     FileWriter myWriter;
+    String LastClassAllocated;
+    String LastMessageSendType;
     Integer register;
     Integer exp_res_;
     Integer if_else_;
     Integer if_then_;
     Integer if_end_;
+    Integer loop;
     Integer oob_ok_;
     Integer oob_err_;
     Integer nsz_ok_;
@@ -619,10 +630,13 @@ class MyVisitor extends GJDepthFirst<String, String> {
         if_else_ = 0;
         if_then_ = 0;
         if_end_ = 0;
+        loop = 0;
         oob_ok_ = 0;
         oob_err_ = 0;
         nsz_ok_ = 0;
         nsz_err_ = 0;
+        LastClassAllocated = "";
+        LastMessageSendType = "";
     }
 
     String getBits(String k) {
@@ -768,12 +782,12 @@ class MyVisitor extends GJDepthFirst<String, String> {
             myWriter.write("    call void @exit(i32 1)\n");
             myWriter.write("    ret void\n");
             myWriter.write("}\n");
-            myWriter.write("\ndefine void @throw_nsz() {\n");
-            myWriter.write("    %_str = bitcast [15 x i8]* @_cNSZ to i8*\n");
-            myWriter.write("    call i32 (i8*, ...) @printf(i8* %_str)\n");
-            myWriter.write("    call void @exit(i32 1)\n");
-            myWriter.write("    ret void\n");
-            myWriter.write("}\n");
+            // myWriter.write("\ndefine void @throw_nsz() {\n");
+            // myWriter.write(" %_str = bitcast [15 x i8]* @_cNSZ to i8*\n");
+            // myWriter.write(" call i32 (i8*, ...) @printf(i8* %_str)\n");
+            // myWriter.write(" call void @exit(i32 1)\n");
+            // myWriter.write(" ret void\n");
+            // myWriter.write("}\n");
             myWriter.write("\n");
 
             n.f2.accept(this, classname); // "{"
@@ -970,17 +984,19 @@ class MyVisitor extends GJDepthFirst<String, String> {
             n.f12.accept(this, argu + "->" + myName); // "}"
         } else {
             register = 0;
-            exp_res_ = 0;
-            if_else_ = 0;
-            if_then_ = 0;
-            if_end_ = 0;
-            oob_ok_ = 0;
-            oob_err_ = 0;
-            nsz_ok_ = 0;
-            nsz_err_ = 0;
+            // exp_res_ = 0;
+            // if_else_ = 0;
+            // if_then_ = 0;
+            // if_end_ = 0;
+            // loop = 0;
+            // oob_ok_ = 0;
+            // oob_err_ = 0;
+            // nsz_ok_ = 0;
+            // nsz_err_ = 0;
             n.f0.accept(this, argu); // "public"
             String myType = n.f1.accept(this, argu); // method type
             String myName = n.f2.accept(this, argu); // method name
+            System.out.println("Method " + myName);
             myWriter.write("\ndefine " + getBits(myType) + " @" + argu + "." + myName + "(i8* %this");
             n.f3.accept(this, argu); // "("
 
@@ -1001,8 +1017,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
                         count = 2;
                 }
 
-                if (!aName.equals("") && !aType.equals(""))
+                if (!aName.equals("") && !aType.equals("")) {
+                    // System.out.println(", " + getBits(aType) + " %." + aName);
                     myWriter.write(", " + getBits(aType) + " %." + aName);
+                }
             }
             myWriter.write(") {");
             for (String arg : arguments) {
@@ -1021,7 +1039,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
                 }
 
                 if (!aName.equals("") && !aType.equals("")) {
-                    myWriter.write("\n\t%" + aName + " alloca " + getBits(aType));
+                    myWriter.write("\n\t%" + aName + " = alloca " + getBits(aType));
                     myWriter.write(
                             "\n\tstore " + getBits(aType) + " %." + aName + ", " + getBits(aType) + "* %" + aName);
                 }
@@ -1036,17 +1054,39 @@ class MyVisitor extends GJDepthFirst<String, String> {
             String rType = ST.lookup(argu, myName, r);
 
             if (ST.location.equals("bodyVariable") || ST.location.equals("argument")) {
-                myWriter.write("\tret " + getBits(myType) + " %" + r + "\n");
+                if (getBits(rType).equals("i8")) {
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + "*, " + getBits(rType) + "** %"
+                            + r + "\n");
+                    myWriter.write("\tret " + getBits(rType) + "* %_" + (register - 1) + "\n");
+                } else {
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + ", " + getBits(rType) + "* %" + r
+                            + "\n");
+                    myWriter.write("\tret " + getBits(rType) + " %_" + (register - 1) + "\n");
+                }
             } else if (ST.location.equals("outside")) {
-                myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
-                        + (offsets.get(argu).variables.get(r) + 8) + "\n");
-                myWriter.write(
-                        "\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(rType) + "*\n");
-                myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + ", " + getBits(rType) + "* %_"
-                        + (register - 2) + "\n");
-                myWriter.write("\tret " + getBits(myType) + " %_" + (register - 1) + "\n");
+                if (getBits(rType).equals("i8")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(argu).variables.get(r) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(rType)
+                            + "**\n");
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + "*, " + getBits(rType) + "** %_"
+                            + (register - 2) + "\n");
+                    myWriter.write("\tret " + getBits(rType) + "* %_" + (register - 1) + "\n");
+                } else {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(argu).variables.get(r) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(rType)
+                            + "*\n");
+                    myWriter.write("\t%_" + register++ + " = load " + getBits(rType) + ", " + getBits(rType) + "* %_"
+                            + (register - 2) + "\n");
+                    myWriter.write("\tret " + getBits(rType) + " %_" + (register - 1) + "\n");
+                }
             } else if (r.equals("times") || r.equals("plus") || r.equals("minus") || r.equals("&&") || r.equals("<")) {
                 myWriter.write("\tret " + getBits(myType) + " %_" + (register - 1) + "\n");
+            } else if (r.equals("true")) {
+                myWriter.write("\tret " + getBits(myType) + " 1" + "\n");
+            } else if (r.equals("false")) {
+                myWriter.write("\tret " + getBits(myType) + " 0" + "\n");
             } else {
                 myWriter.write("\tret " + getBits(myType) + " " + r + "\n");
             }
@@ -1111,6 +1151,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      * f0 -> "System.out.println" f1 -> "(" f2 -> Expression() f3 -> ")" f4 -> ";"
      */
     public String visit(PrintStatement n, String argu) throws Exception {
+        // System.out.println("print");
         if (ST.getState() == 1) {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1127,6 +1168,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
             } else if (isInteger(expr)) {
                 myWriter.write("\tcall void (i32) @print_int(i32 " + expr + ")\n");
             } else if (expr.equals("messageSend")) {
+                myWriter.write("\tcall void (i32) @print_int(i32 %_" + (register - 1) + ")\n");
+            } else if (expr.equals("plus") || expr.equals("times") || expr.equals("minus")) {
                 myWriter.write("\tcall void (i32) @print_int(i32 %_" + (register - 1) + ")\n");
             }
             n.f3.accept(this, argu);
@@ -1234,7 +1277,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
             String right = n.f2.accept(this, argu);
             String rightType = ST.lookup(scope[0], scope[1], right);
             String rightLocation = ST.location;
-            System.out.println(leftLocation + " -> " + rightLocation);
+            // System.out.println(leftLocation + " -> " + rightLocation);
             if (leftLocation.equals("bodyVariable") || leftLocation.equals("argument")) {
                 if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
                     if (getBits(rightType).equals("i8")) {
@@ -1248,6 +1291,8 @@ class MyVisitor extends GJDepthFirst<String, String> {
                         myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 1) + ", "
                                 + getBits(leftType) + "* %" + left + "\n");
                     }
+                } else if (rightLocation.equals("outside") && right.equals("this")) {
+                    myWriter.write("\tstore i8* %this, i8** %" + left + "\n");
                 } else if (rightLocation.equals("outside")) {
                     if (getBits(rightType).equals("i8")) {
                         myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
@@ -1265,16 +1310,20 @@ class MyVisitor extends GJDepthFirst<String, String> {
                                 + getBits(leftType) + "* %" + left + "\n");
                     }
                 } else if (right.equals("times") || right.equals("plus") || right.equals("minus")) {
-                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 1) + ", " + getBits(leftType)
-                            + "* %" + left + "\n");
+                    myWriter.write("\tstore i32 %_" + (register - 1) + ", " + getBits(leftType) + "* %" + left + "\n");
                 } else if (right.equals("allocation")) {
                     myWriter.write("\tstore i8* %_" + (register - 3) + ", i8** %" + left + "\n");
+                } else if (right.equals("arrayallocation")) {
+                    myWriter.write("\tstore i32* %_" + (register - 1) + ", i32** %" + left + "\n");
                 } else if (right.equals("true")) {
                     myWriter.write("\tstore i1 1, i1* %" + left + "\n");
                 } else if (right.equals("false")) {
                     myWriter.write("\tstore i1 0, i1* %" + left + "\n");
                 } else if (isInteger(right)) {
                     myWriter.write("\tstore i32 " + right + ", " + getBits(leftType) + "* %" + left + "\n");
+                } else if (right.equals("messageSend")) {
+                    myWriter.write("\tstore " + getBits(LastMessageSendType) + " %_" + (register - 1) + ", "
+                            + getBits(leftType) + "* %" + left + "\n");
                 }
             } else if (leftLocation.equals("outside")) {
                 if (rightLocation.equals("bodyVariable") || rightLocation.equals("argument")) {
@@ -1283,11 +1332,20 @@ class MyVisitor extends GJDepthFirst<String, String> {
 
                     myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
                             + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
-                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
-                            + getBits(leftType) + "*\n");
+                    if (getBits(leftType).equals("i8")) {
+                        myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                                + getBits(leftType) + "**\n");
 
-                    myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 3) + ", " + getBits(leftType)
-                            + "* %_" + (register - 1) + "\n");
+                        myWriter.write("\tstore " + getBits(rightType) + "* %_" + (register - 3) + ", "
+                                + getBits(leftType) + "** %_" + (register - 1) + "\n");
+                    } else {
+                        myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                                + getBits(leftType) + "*\n");
+
+                        myWriter.write("\tstore " + getBits(rightType) + " %_" + (register - 3) + ", "
+                                + getBits(leftType) + "* %_" + (register - 1) + "\n");
+
+                    }
                 } else if (rightLocation.equals("outside")) {
                     myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
                             + (offsets.get(scope[0]).variables.get(right) + 8) + "\n");
@@ -1316,6 +1374,13 @@ class MyVisitor extends GJDepthFirst<String, String> {
                             + getBits(leftType) + "*\n");
 
                     myWriter.write("\tstore i8* %_" + (register - 5) + ", i8** %_" + (register - 1) + "\n");
+                } else if (right.equals("allocation")) {
+                    myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
+                            + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
+                    myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to "
+                            + getBits(leftType) + "*\n");
+
+                    myWriter.write("\tstore i32* %_" + (register - 5) + ", i32** %_" + (register - 1) + "\n");
                 } else if (right.equals("true")) {
                     myWriter.write("\t%_" + register++ + " = getelementptr i8, i8* %this, i32 "
                             + (offsets.get(scope[0]).variables.get(left) + 8) + "\n");
@@ -1357,6 +1422,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(ArrayAssignmentStatement n, String argu) throws Exception {
         // System.out.println("ArrayAssignmentStatement");
         if (ST.getState() == 1) {
+
             String[] scope = argu.split("->");
 
             String left = n.f0.accept(this, argu);
@@ -1435,8 +1501,44 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(ArrayLookup n, String argu) throws Exception {
         // System.out.println("ArrayLookup");
         if (ST.getState() == 1) {
+            String[] scope = argu.split("->");
+            String left = n.f0.accept(this, argu);
+            String leftType = ST.lookup(scope[0], scope[1], left);
+            String leftLocation = ST.location;
+            n.f1.accept(this, argu);
+            String position = n.f2.accept(this, argu);
+            String positionType = ST.lookup(scope[0], scope[1], position);
+            String positionLocation = ST.location;
 
-            return "int";
+            if (leftLocation.equals("bodyVariable") || leftLocation.equals("argument")) {
+                if (positionLocation.equals("bodyVariable") || positionLocation.equals("argument")) {
+                } else if (positionLocation.equals("outside")) {
+                } else if (isInteger(position)) {
+                    myWriter.write("\n\t%_" + register++ + " = load i32*, i32** %" + left + "\n");
+                    myWriter.write("\t%_" + register++ + " = load i32, i32* %_" + (register - 2) + "\n");
+
+                    myWriter.write("\t%_" + register++ + " = icmp sge i32 " + position + ", 0" + "\n");
+                    myWriter.write(
+                            "\t%_" + register++ + " = icmp slt i32 " + position + ", %_" + (register - 3) + "\n");
+                    myWriter.write(
+                            "\t%_" + register++ + " = and i1 %_" + (register - 3) + ", %_" + (register - 2) + "\n");
+                    myWriter.write("\tbr i1 %_" + (register - 1) + ", label %oob_ok_" + oob_ok_++ + ", label %oob_err_"
+                            + oob_err_++ + "\n");
+                    myWriter.write("\n\toob_err_" + (oob_err_ - 1) + ":\n");
+                    myWriter.write("\tcall void @throw_oob()\n");
+                    myWriter.write("\tbr label %oob_ok_" + (oob_ok_ - 1) + "\n");
+                    myWriter.write("\n\toob_ok_" + (oob_ok_ - 1) + ":\n");
+                    myWriter.write("\t%_" + register++ + " = add i32 1, " + position + "\n");
+                    myWriter.write("\t%_" + register++ + " = getelementptr i32 , i32* %_" + (register - 7) + ", i32 %_"
+                            + (register - 2) + "\n");
+                    myWriter.write("\t%_" + register++ + " = load i32 , i32* %_" + (register - 2) + "\n");
+                }
+            } else if (leftLocation.equals("outside")) {
+
+            }
+            n.f3.accept(this, argu);
+
+            return "arraylookup";
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1453,22 +1555,30 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(IfStatement n, String argu) throws Exception {
         // System.out.println("IF");
         if (ST.getState() == 1) {
+            String[] scope = argu.split("->");
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
-            n.f2.accept(this, argu);
+            String expr = n.f2.accept(this, argu);
+            String exprType = ST.lookup(scope[0], scope[1], expr);
+            String exprLocation = ST.location;
+            if (exprLocation.equals("bodyVariable") || exprLocation.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load i1, i1* %" + expr + "\n");
+            }
             n.f3.accept(this, argu);
+
             myWriter.write("\tbr i1 %_" + (register - 1) + ", label %if_then_" + if_then_++ + ", label %if_else_"
                     + if_else_++ + "\n");
             myWriter.write("\tif_else_" + (if_else_ - 1) + ":\n");
+            Integer if_then = if_then_;
 
             n.f6.accept(this, argu);
             myWriter.write("\n\tbr label %if_end_" + if_end_++ + "\n");
+            Integer if_end = if_end_;
             n.f5.accept(this, argu);
-            myWriter.write("\tif_then_" + (if_then_ - 1) + ":\n");
+            myWriter.write("\tif_then_" + (if_then - 1) + ":\n");
             n.f4.accept(this, argu);
-            myWriter.write("\n\tbr label %if_end_" + (if_end_ - 1) + "\n");
-            myWriter.write("\tif_end_" + (if_end_ - 1) + ":\n");
-
+            myWriter.write("\n\tbr label %if_end_" + (if_end - 1) + "\n");
+            myWriter.write("\tif_end_" + (if_end - 1) + ":\n");
             return null;
         } else {
             n.f0.accept(this, argu);
@@ -1489,6 +1599,26 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(WhileStatement n, String argu) throws Exception {
         // System.out.println("WHILE");
         if (ST.getState() == 1) {
+            String[] scope = argu.split("->");
+            n.f0.accept(this, argu);
+            n.f1.accept(this, argu);
+            Integer l = loop++;
+            Integer iner = 1;
+            myWriter.write("\tbr label %loop" + l + iner++ + "\n");
+            myWriter.write("\tloop" + l + (iner - 1) + ":\n");
+            String expr = n.f2.accept(this, argu);
+            String exprType = ST.lookup(scope[0], scope[1], expr);
+            String exprLocation = ST.location;
+            if (exprLocation.equals("bodyVariable") || exprLocation.equals("argument")) {
+                myWriter.write("\t%_" + register++ + " = load i1, i1* %" + expr + "\n");
+            }
+            n.f3.accept(this, argu);
+            myWriter.write(
+                    "\tbr i1 %_" + (register - 1) + ", label %loop" + l + iner++ + ", label %loop" + l + iner++ + "\n");
+            myWriter.write("\tloop" + l + (iner - 2) + ":\n");
+            n.f4.accept(this, argu);
+            myWriter.write("\tbr label %loop" + l + (iner - 3) + "\n");
+            myWriter.write("\tloop" + l + (iner - 1) + ":\n");
 
             return null;
         } else {
@@ -1604,34 +1734,106 @@ class MyVisitor extends GJDepthFirst<String, String> {
      */
     public String visit(MessageSend n, String argu) throws Exception {
         if (ST.getState() == 1) {
+            myWriter.write("\n");
             String[] scope = argu.split("->");
             String object = n.f0.accept(this, argu);
             String objectType = ST.lookup(scope[0], scope[1], object);
             String objectLocation = ST.location;
+
+            if (object.equals("allocation")) {
+                objectType = LastClassAllocated;
+                objectLocation = "allocation";
+            }
             n.f1.accept(this, argu);
             String method = n.f2.accept(this, argu);
+            String methodType = "";
             n.f3.accept(this, argu);
             String l = n.f4.accept(this, argu);
-            String[] list = l.split(",");
+            String[] list = {};
+            if (l != null) {
+                list = l.split(",");
+            }
             n.f5.accept(this, argu);
-
+            // System.out.println(object + " " + LastClassAllocated);
             if (objectLocation.equals("bodyVariable") || objectLocation.equals("argument")) {
+
                 myWriter.write("\t%_" + register++ + " = load i8*, i8** %" + object + "\n");
                 myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to i8***" + "\n");
                 myWriter.write("\t%_" + register++ + " = load i8**, i8*** %_" + (register - 2) + "\n");
                 myWriter.write("\t%_" + register++ + " = getelementptr i8*, i8** %_" + (register - 2) + ", i32 "
-                        + offsets.get(objectType).methods.get(method) + "\n");
+                        + (offsets.get(objectType).methods.get(method) / 8) + "\n");
                 myWriter.write("\t%_" + register++ + " = load i8*, i8** %_" + (register - 2) + "\n");
                 String classOfTheMethod = offsets.get(objectType).belongsTo.get(method);
-                String methodType = ST.getMethod(classOfTheMethod, method).type;
+                methodType = ST.getMethod(classOfTheMethod, method).type;
                 myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(methodType)
                         + " (i8*");
                 for (Map.Entry<String, String> entry : ST.getMethod(classOfTheMethod, method).arguments.entrySet()) {
                     myWriter.write("," + getBits(entry.getValue()));
                 }
+                myWriter.write(")*\n");
+                String loads = "";
+                Integer count = 0;
+                if (l != null) {
+                    for (String li : list) {
+                        String liType = ST.lookup(scope[0], scope[1], li);
+                        String liLocation = ST.location;
+                        if (liLocation.equals("bodyVariable") || liLocation.equals("argument")) {
+                            loads = loads + ("\t%_" + register++ + " = load " + getBits(liType) + ", " + getBits(liType)
+                                    + "* %" + li + "\n");
+                            // myWriter.write(loads);
+                            count++;
+                        }
+                    }
+                    myWriter.write(loads);
+                    myWriter.write("\t%_" + register++ + " = call " + getBits(methodType) + " %_"
+                            + (register - count - 2) + "(i8* %_" + (register - count - 7));
+                    for (String li : list) {
+                        String liType = ST.lookup(scope[0], scope[1], li);
+                        String liLocation = ST.location;
+                        if (liLocation.equals("bodyVariable") || liLocation.equals("argument")) {
+                            if (liType.equals("int"))
+                                myWriter.write(", i32 %_" + (register - count-- - 1));
+                            else if (li.equals("true"))
+                                myWriter.write(", i1 %_" + (register - count-- - 1));
+                            else if (li.equals("false"))
+                                myWriter.write(", i1 %_" + (register - count-- - 1));
+                            else {
+                                myWriter.write(", i8* %_" + (register - count-- - 1));
+                            }
+                            System.out.println(count);
+                        } else {
+                            if (isInteger(li))
+                                myWriter.write(", i32 " + li);
+                            else if (li.equals("true"))
+                                myWriter.write(", i1 1");
+                            else if (li.equals("false"))
+                                myWriter.write(", i1 0");
+                        }
+                    }
+                } else {
+                    myWriter.write("\t%_" + register++ + " = call " + getBits(methodType) + " %_"
+                            + (register - count - 2) + "(i8* %_" + (register - count - 7));
+                }
                 myWriter.write(")\n");
+
+            } else if (objectLocation.equals("outside")) {
+
+            } else if (objectLocation.equals("allocation")) {
+                myWriter.write("\n\t%_" + register++ + " = bitcast i8* %_" + (register - 4) + " to i8***" + "\n");
+                myWriter.write("\t%_" + register++ + " = load i8**, i8*** %_" + (register - 2) + "\n");
+                myWriter.write("\t%_" + register++ + " = getelementptr i8*, i8** %_" + (register - 2) + ", i32 "
+                        + offsets.get(objectType).methods.get(method) + "\n");
+                myWriter.write("\t%_" + register++ + " = load i8*, i8** %_" + (register - 2) + "\n");
+                String classOfTheMethod = offsets.get(objectType).belongsTo.get(method);
+                methodType = ST.getMethod(classOfTheMethod, method).type;
+                myWriter.write("\t%_" + register++ + " = bitcast i8* %_" + (register - 2) + " to " + getBits(methodType)
+                        + " (i8*");
+                for (Map.Entry<String, String> entry : ST.getMethod(classOfTheMethod, method).arguments.entrySet()) {
+                    myWriter.write("," + getBits(entry.getValue()));
+                }
+                myWriter.write(")*\n");
                 myWriter.write("\t%_" + register++ + " = call " + getBits(methodType) + " %_" + (register - 2)
-                        + "(i8* %_" + (register - 7));
+                        + "(i8* %_" + (register - 9));
                 if (l != null) {
                     for (String li : list) {
                         String liType = ST.lookup(scope[0], scope[1], li);
@@ -1659,13 +1861,13 @@ class MyVisitor extends GJDepthFirst<String, String> {
                     }
                 }
                 myWriter.write(")\n");
-
-            } else if (objectLocation.equals("outside")) {
-
             }
-
+            myWriter.write("\n");
+            LastMessageSendType = methodType;
             return "messageSend";
-        } else {
+        } else
+
+        {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
             n.f2.accept(this, argu);
@@ -1723,8 +1925,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
     public String visit(NotExpression n, String argu) throws Exception {
         // System.out.println("Not");
         if (ST.getState() == 1) {
-
-            return "return boolean";
+            n.f0.accept(this, argu);
+            String bool = n.f1.accept(this, argu);
+            myWriter.write("\t%_" + register++ + " = xor i1 1, %_" + (register - 2) + "\n");
+            return bool;
         } else {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -1770,6 +1974,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
             } else {
                 isLiteral2 = true;
             }
+            if (identifier1.equals("arraylookup"))
+                identifier1 = "%_" + (register - 9);
+            if (identifier2.equals("arraylookup"))
+                identifier2 = "%_" + (register - 1);
 
             if (isLiteral1 && !isLiteral2)
                 myWriter.write("\t%_" + register++ + " = add i32 " + identifier1 + ", %_" + (register - 2) + "\n");
@@ -1834,7 +2042,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
             } else {
                 isLiteral2 = true;
             }
-
+            if (identifier1.equals("arraylookup"))
+                identifier1 = "%_" + (register - 9);
+            if (identifier2.equals("arraylookup"))
+                identifier2 = "%_" + (register - 1);
             if (isLiteral1 && !isLiteral2)
                 myWriter.write("\t%_" + register++ + " = sub i32 " + identifier1 + ", %_" + (register - 2) + "\n");
             else if (!isLiteral1 && isLiteral2)
@@ -1897,7 +2108,10 @@ class MyVisitor extends GJDepthFirst<String, String> {
             } else {
                 isLiteral2 = true;
             }
-
+            if (identifier1.equals("arraylookup"))
+                identifier1 = "%_" + (register - 9);
+            if (identifier2.equals("arraylookup"))
+                identifier2 = "%_" + (register - 1);
             if (isLiteral1 && !isLiteral2)
                 myWriter.write("\t%_" + register++ + " = mul i32 " + identifier1 + ", %_" + (register - 2) + "\n");
             else if (!isLiteral1 && isLiteral2)
@@ -1951,7 +2165,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
                     + exp_res_++ + "\n\n");
 
             myWriter.write("\texp_res_" + (exp_res_ - 1) + ":\n");
-            myWriter.write("\tbr label %exp_res__" + (exp_res_ + 2) + "\n\n");
+            myWriter.write("\tbr label %exp_res_" + (exp_res_ + 2) + "\n\n");
 
             myWriter.write("\texp_res_" + exp_res_++ + ":\n");
 
@@ -1994,6 +2208,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
      * f0 -> "new" f1 -> "int" f2 -> "[" f3 -> Expression() f4 -> "]"
      */
     public String visit(ArrayAllocationExpression n, String argu) throws Exception {
+        // System.out.println("ArrayAllocationExpression");
         if (ST.getState() == 1) {
             n.f0.accept(this, argu);
             n.f1.accept(this, argu);
@@ -2082,6 +2297,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
             String[] scope = argu.split("->");
             String expr = n.f1.accept(this, argu);
             Integer allocationSize = 8;
+            // System.out.println(expr);
             for (Map.Entry<String, Integer> entry : offsets.get(expr).variables.entrySet()) {
                 if (ST.getClass(expr).getAtribute(entry.getKey()).equals("int"))
                     allocationSize += 4;
@@ -2110,7 +2326,7 @@ class MyVisitor extends GJDepthFirst<String, String> {
             myWriter.write("\tstore i8** %_" + (register - 1) + ", i8*** %_" + (register - 2) + "\n");
             n.f2.accept(this, argu);
             n.f3.accept(this, argu);
-
+            LastClassAllocated = expr;
             return "allocation";
         } else
 

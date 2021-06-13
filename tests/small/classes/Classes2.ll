@@ -60,7 +60,7 @@ define i32 @main() {
 	%_8 = load i8**, i8*** %_7
 	%_9 = getelementptr i8*, i8** %_8, i32 0
 	%_10 = load i8*, i8** %_9
-	%_11 = bitcast i8* %_10 to i32 (i8*,i32)
+	%_11 = bitcast i8* %_10 to i32 (i8*,i32)*
 	%_12 = call i32 %_11(i8* %_6, i32 1)
 	call void (i32) @print_int(i32 %_12)
 	%_13 = load i8*, i8** %d
@@ -70,7 +70,7 @@ define i32 @main() {
 	%_16 = load i8**, i8*** %_15
 	%_17 = getelementptr i8*, i8** %_16, i32 0
 	%_18 = load i8*, i8** %_17
-	%_19 = bitcast i8* %_18 to i32 (i8*,i32)
+	%_19 = bitcast i8* %_18 to i32 (i8*,i32)*
 	%_20 = call i32 %_19(i8* %_14, i32 3)
 	call void (i32) @print_int(i32 %_20)
 	ret i32 0

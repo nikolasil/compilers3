@@ -1,6 +1,6 @@
 class BinaryTree {
 	public static void main(String[] a) {
-		System.out.println(5);
+		System.out.println(new BT().Start());
 	}
 }
 
@@ -109,8 +109,7 @@ class Tree {
 	public boolean Compare(int num1, int num2) {
 		boolean ntb;
 		int nti;
-		int nikolas;
-		nikolas = 5;
+
 		ntb = false;
 		nti = num2 + 1;
 		if (num1 < num2)

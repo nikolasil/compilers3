@@ -27,13 +27,6 @@ define void @throw_nsz() {
     ret void
 }
 
-define void @throw_nsz() {
-    %_str = bitcast [15 x i8]* @_cNSZ to i8*
-    call i32 (i8*, ...) @printf(i8* %_str)
-    call void @exit(i32 1)
-    ret void
-}
-
 define i32 @main() {
 	%b = alloca i1
 	%c = alloca i1
@@ -44,7 +37,7 @@ define i32 @main() {
 	br i1 %_0, label %exp_res_1, label %exp_res_0
 
 	exp_res_0:
-	br label %exp_res__3
+	br label %exp_res_3
 
 	exp_res_1:
 	%_1 = load i1, i1* %c
@@ -65,5 +58,7 @@ define i32 @main() {
 
 	br label %if_end_0
 	if_end_0:
+	%_3 = load i32, i32* %x
+	call void (i32) @print_int(i32 %_3)
 	ret i32 0
 }
