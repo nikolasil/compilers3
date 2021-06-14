@@ -27,7 +27,8 @@ public class Main {
                 SymbolTable st = new SymbolTable();
                 Map<String, VTable> offsets = new LinkedHashMap<String, VTable>();
 
-                FileWriter myWriter = new FileWriter(args[i].substring(0, args[i].length() - 5) + "2.ll");
+                FileWriter myWriter = new FileWriter(
+                        "llvmOutput/" + args[i].substring(0, args[i].length() - 5) + ".ll");
 
                 MyVisitor declarationST = new MyVisitor(st, offsets, myWriter);
                 MyVisitor llvm = new MyVisitor(st, offsets, myWriter);
