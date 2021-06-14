@@ -27,13 +27,6 @@ define void @throw_nsz() {
     ret void
 }
 
-define void @throw_nsz() {
-    %_str = bitcast [15 x i8]* @_cNSZ to i8*
-    call i32 (i8*, ...) @printf(i8* %_str)
-    call void @exit(i32 1)
-    ret void
-}
-
 define i32 @main() {
 	%x = alloca i32*
 	%_0 = add i32 1, 2

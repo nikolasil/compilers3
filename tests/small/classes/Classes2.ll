@@ -35,13 +35,6 @@ define void @throw_nsz() {
     ret void
 }
 
-define void @throw_nsz() {
-    %_str = bitcast [15 x i8]* @_cNSZ to i8*
-    call i32 (i8*, ...) @printf(i8* %_str)
-    call void @exit(i32 1)
-    ret void
-}
-
 define i32 @main() {
 	%b = alloca i8*
 	%d = alloca i8*
@@ -55,6 +48,7 @@ define i32 @main() {
 	%_5 = getelementptr [2 x i8*], [2 x i8*]* @.Derived_vtable, i32 0, i32 0
 	store i8** %_5, i8*** %_4
 	store i8* %_3, i8** %d
+
 	%_6 = load i8*, i8** %b
 	%_7 = bitcast i8* %_6 to i8***
 	%_8 = load i8**, i8*** %_7
@@ -62,9 +56,11 @@ define i32 @main() {
 	%_10 = load i8*, i8** %_9
 	%_11 = bitcast i8* %_10 to i32 (i8*,i32)*
 	%_12 = call i32 %_11(i8* %_6, i32 1)
+
 	call void (i32) @print_int(i32 %_12)
 	%_13 = load i8*, i8** %d
 	store i8* %_13, i8** %b
+
 	%_14 = load i8*, i8** %b
 	%_15 = bitcast i8* %_14 to i8***
 	%_16 = load i8**, i8*** %_15
@@ -72,12 +68,13 @@ define i32 @main() {
 	%_18 = load i8*, i8** %_17
 	%_19 = bitcast i8* %_18 to i32 (i8*,i32)*
 	%_20 = call i32 %_19(i8* %_14, i32 3)
+
 	call void (i32) @print_int(i32 %_20)
 	ret i32 0
 }
 
 define i32 @Base.set(i8* %this, i32 %.x) {
-	%x alloca i32
+	%x = alloca i32
 	store i32 %.x, i32* %x
 
 	%_0 = load i32, i32* %x
@@ -99,14 +96,14 @@ define i32 @Base.get(i8* %this) {
 }
 
 define i32 @Derived.set(i8* %this, i32 %.x) {
-	%x alloca i32
+	%x = alloca i32
 	store i32 %.x, i32* %x
 
 	%_0 = load i32, i32* %x
 	%_1 = mul i32 %_0, 2
 	%_2 = getelementptr i8, i8* %this, i32 8
 	%_3 = bitcast i8* %_2 to i32*
-	store i8 %_1, i32* %_3
+	store i32 %_1, i32* %_3
 	%_4 = getelementptr i8, i8* %this, i32 8
 	%_5 = bitcast i8* %_4 to i32*
 	%_6 = load i32, i32* %_5
