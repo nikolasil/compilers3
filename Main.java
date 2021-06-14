@@ -26,7 +26,8 @@ public class Main {
                 System.err.println("Program parsed successfully.");
                 SymbolTable st = new SymbolTable();
                 Map<String, VTable> offsets = new LinkedHashMap<String, VTable>();
-
+                File file = new File("llvmOutput/" + args[i].substring(0, args[i].length() - 5) + ".ll");
+                file.getParentFile().mkdirs();
                 FileWriter myWriter = new FileWriter(
                         "llvmOutput/" + args[i].substring(0, args[i].length() - 5) + ".ll");
 
